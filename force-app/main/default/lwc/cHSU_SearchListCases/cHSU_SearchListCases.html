@@ -1,0 +1,77 @@
+<!--
+  @description       : 
+  @author            : ChangeMeIn@UserSettingsUnder.SFDoc
+  @group             : 
+  @last modified on  : 05-29-2025
+  @last modified by  : ChangeMeIn@UserSettingsUnder.SFDoc
+  Modifications Log
+  Ver   Date         Author                               Modification
+  1.0   05-09-2025   ChangeMeIn@UserSettingsUnder.SFDoc   Initial Version
+-->
+<template>
+	<lightning-card icon-name="utility:search" title="Buscador de expedientes">
+		<lightning-button-group slot="actions">
+			<lightning-button-icon icon-name="utility:search" alternative-text="Buscar" title="Buscar" onclick={handleSearch} class="slds-p-left_small classButtonSearch"></lightning-button-icon>
+			<lightning-button-icon-stateful icon-name="utility:filterList" selected={isFilter} onclick={handleFilter} alternative-text="Filtrar"></lightning-button-icon-stateful>
+		</lightning-button-group>
+		<template lwc:if={spinner}>
+			<div style="display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 120px;">
+				<lightning-spinner alternative-text="Cargando" size="medium"></lightning-spinner>
+				<lightning-formatted-text value="Cargando buscador expediente" data-id="idTextLoading" style="margin-top: 4rem;"></lightning-formatted-text>
+			</div>
+		</template>
+		<template lwc:if={token}>
+			<lightning-layout multiple-rows="true">
+				<lightning-layout-item size="3">
+					<lightning-input class="slds-p-around_x-small" type="text" label="Nombre" name="nombre"></lightning-input>
+				</lightning-layout-item>
+				<lightning-layout-item size="3">
+					<lightning-input class="slds-p-around_x-small" type="text" label="Primer apellido" name="apellido1"></lightning-input>
+				</lightning-layout-item>
+				<lightning-layout-item size="3">
+					<lightning-input class="slds-p-around_x-small" type="text" label="Segundo apellido" name="apellido2"></lightning-input>
+				</lightning-layout-item>
+				<lightning-layout-item size="3">
+					<lightning-input class="slds-p-around_x-small" type="text" label="DNI/NIF/Pasaporte" name="dni"></lightning-input>
+				</lightning-layout-item>
+				<lightning-layout-item size="4">
+					<c-c-h-s-u-_-global-lists-picker 
+							record-type="HSU_UTS">
+					</c-c-h-s-u-_-global-lists-picker>
+				</lightning-layout-item>
+				<lightning-layout-item size="4">
+					<c-c-h-s-u-_-global-lists-picker 
+							record-type="HSU_system">
+					</c-c-h-s-u-_-global-lists-picker>
+				</lightning-layout-item>
+				<lightning-layout-item size="4">
+					<lightning-input class="slds-p-around_x-small" type="text" label="Nº Expediente" name="numeroExpediente"></lightning-input>
+				</lightning-layout-item>
+				<template lwc:if={data}>
+					<lightning-layout-item size="12" class="slds-p-top_small">
+						<lightning-datatable
+							key-field="Id"
+							data={dataFilter}
+							columns={columns}
+							hide-checkbox-column
+							onrowaction={handleRowAction}>
+						</lightning-datatable>
+					</lightning-layout-item>
+				</template>
+			</lightning-layout>
+		</template>
+		<template lwc:elseif={error}>
+			<lightning-button-icon slot="actions" icon-name="utility:loop" alternative-text="Refrescar" title="Refrescar" onclick={handleReload}></lightning-button-icon>
+			<div class="slds-box slds-box_small">
+				<div class="slds-box slds-box_x-small slds-notify slds-notify_alert slds-alert_error">
+					<lightning-formatted-text value={error} class="slds-p-around_small"></lightning-formatted-text>
+				</div>
+			</div>
+		</template>
+		<template lwc:if={showMoreVisible}>
+			<p data-id="idFooter" slot="footer">
+				<lightning-button variant="base" label={labelShowMore} title={labelShowMore} onclick={handleShowMore}></lightning-button>
+			</p>
+		</template>
+	</lightning-card>
+</template>

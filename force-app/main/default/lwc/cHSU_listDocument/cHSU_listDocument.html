@@ -1,0 +1,60 @@
+<!--
+  @description       : 
+  @author            : ChangeMeIn@UserSettingsUnder.SFDoc
+  @group             : 
+  @last modified on  : 05-21-2025
+  @last modified by  : ChangeMeIn@UserSettingsUnder.SFDoc
+-->
+  <!--
+  @description       : 
+  @author            : ChangeMeIn@UserSettingsUnder.SFDoc
+  @group             : 
+  @last modified on  : 05-21-2025
+  @last modified by  : ChangeMeIn@UserSettingsUnder.SFDoc
+  Modifications Log
+  Ver   Date         Author                               Modification
+  1.0   05-13-2025   ChangeMeIn@UserSettingsUnder.SFDoc   Initial Version
+-->
+<template>
+	<div class="slds-card slds-card_boundary slds-card_related-list-fix">
+		<lightning-card title={titleCard} icon-name="standard:document">
+			<!-- <div class="slds-p-horizontal_medium slds-p-bottom_small slds-text-body_small slds-text-color_weak"> -->
+				<!-- Ordenado por: {sortedByLabel} -->
+			<!-- </div> -->
+			<template lwc:if={data}>
+				<lightning-layout multiple-rows="true">
+					<template for:each={data} for:item="item">
+						<lightning-layout-item size="12" key={item.identificadorDocumento}>
+							<lightning-button data-name={item.identificadorDocumento} icon-name="utility:forward" variant="base" label={item.nombreDocumento} title="Descargar documento" class="slds-m-left_x-small"></lightning-button>
+						</lightning-layout-item>
+						<lightning-layout-item size="1" key={item.identificadorDocumento}></lightning-layout-item>
+						<lightning-layout-item size="5" key={item.identificadorDocumento}>
+							<lightning-input type="text" label="Tipo" value={item.tipoDocumento} readonly variant="label-inline"></lightning-input>
+						</lightning-layout-item>
+						<lightning-layout-item size="5" key={item.identificadorDocumento}>
+							<lightning-input type="text" label="Sistema" value={item.sistema} readonly variant="label-inline"></lightning-input>
+						</lightning-layout-item>
+						<lightning-layout-item size="1" key={item.identificadorDocumento}>
+							<lightning-button-icon data-name={item.identificadorDocumento} icon-name="action:download" onclick={handleDownload}></lightning-button-icon>
+						</lightning-layout-item>
+					</template>
+				</lightning-layout>
+			</template>
+			<template lwc:elseif={error}>
+				<lightning-button-icon slot="actions" icon-name="utility:loop" alternative-text="Refrescar" title="Refrescar" onclick={handleReload}></lightning-button-icon>
+				<div class="slds-box slds-box_small">
+					<div class="slds-box slds-box_x-small slds-notify slds-notify_alert slds-alert_error">
+						<lightning-formatted-text value={error} class="slds-p-around_small"></lightning-formatted-text>
+					</div>
+				</div>
+				
+			</template>
+			<template lwc:else>
+				<div style="display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 120px;">
+					<lightning-spinner alternative-text="Cargando" size="medium"></lightning-spinner>
+					<lightning-formatted-text value="Cargando documentos" data-id="idTextLoading" style="margin-top: 4rem;"></lightning-formatted-text>
+				</div>
+			</template>    
+		</lightning-card>
+	</div>
+</template>

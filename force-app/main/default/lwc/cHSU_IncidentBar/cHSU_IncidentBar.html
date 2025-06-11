@@ -1,0 +1,61 @@
+<template>
+    <div class="contenedor">
+        <div class="cabecera">
+            <span class="titulo">Incidencias</span>
+        </div>
+        <template lwc:if={incidenciaRecordTypeId}>
+            <lightning-record-edit-form object-api-name="Incident" onsuccess={handleSuccess}
+                record-type-id={incidenciaRecordTypeId} onerror={handleError}>
+
+                <lightning-input-field field-name="Subject" class="campo" label="Asunto" required></lightning-input-field>
+                <lightning-input-field field-name="HSU_Description__c" class="campo" required
+                    label="Descripción"></lightning-input-field>
+
+                <div class="botonera">
+                    <lightning-button type="submit" label="Enviar incidencia" variant="brand"></lightning-button>
+                </div>
+            </lightning-record-edit-form>
+            
+            <!-- Mensaje de éxito -->
+            <div if:true={showSuccessAlert} class="slds-notify slds-notify_alert custom-alert success-alert" role="alert">
+                <span class="slds-assistive-text">Éxito</span>
+                <lightning-icon icon-name="utility:success" size="small" class="slds-m-right_x-small alert-icon"></lightning-icon>
+                <h2>
+                    ¡Incidencia enviada correctamente!
+                    <a if:true={incidentUrl} href={incidentUrl} onclick={navigateToRecord} class="slds-text-link">Ver detalle</a>
+                </h2>
+                <div class="slds-notify__close">
+                    <lightning-button-icon 
+                        icon-name="utility:close"
+                        size="small" 
+                        variant="bare"
+                        alternative-text="Cerrar" 
+                        onclick={closeSuccessAlert}
+                        class="close-button">
+                    </lightning-button-icon>
+                </div>
+            </div>
+
+            <!-- Mensaje de error -->
+            <div if:true={showErrorAlert} class="slds-notify slds-notify_alert custom-alert error-alert" role="alert">
+                <span class="slds-assistive-text">Error</span>
+                <lightning-icon icon-name="utility:error" size="small" class="slds-m-right_x-small alert-icon"></lightning-icon>
+                <h2>
+                    Error al enviar la incidencia
+                    <span class="error-details">{errorMessage}</span>
+                </h2>
+                <div class="slds-notify__close">
+                    <lightning-button-icon 
+                        icon-name="utility:close"
+                        size="small" 
+                        variant="bare"
+                        alternative-text="Cerrar" 
+                        onclick={closeErrorAlert}
+                        class="close-button">
+                    </lightning-button-icon>
+                </div>
+            </div>
+        </template>
+    </div>
+</template>
+

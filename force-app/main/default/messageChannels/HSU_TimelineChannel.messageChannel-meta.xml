@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<LightningMessageChannel xmlns="http://soap.sforce.com/2020/04/metadata">
+    <description>Canal para enviar datos de la timeline entre LWCs</description>
+        <isExposed>true</isExposed>
+        <lightningMessageFields>
+            <description>Datos de la timeline serializados</description>
+            <fieldName>timelineRecord</fieldName>
+        </lightningMessageFields>
+    <masterLabel>HSU Timeline Channel</masterLabel>
+</LightningMessageChannel>

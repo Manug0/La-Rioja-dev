@@ -1,0 +1,17 @@
+.classRecordPill {
+    --slds-c-pill-color-background: #243746;
+    --slds-c-pill-color-border: #ffff;
+    color: #ffff;
+    transition: all 0.2s ease-in-out;
+}
+
+.slds-button--icon {
+   fill: #ffffff;
+}
+
+.classRecordPill:hover {
+    --slds-c-pill-color-background: #ffffff;
+    --slds-c-pill-color-border: #243746;
+    color: #243746;
+    cursor: pointer;
+}

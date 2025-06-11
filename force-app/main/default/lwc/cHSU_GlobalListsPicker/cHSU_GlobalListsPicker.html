@@ -1,0 +1,33 @@
+<template>
+    <div class=" slds-m-horizontal_x-small">
+        <div class="slds-form-element slds-m-top_x-small">
+            <!-- Record Picker -->
+            <lightning-record-picker
+                label={pickerLabel}
+                object-api-name="HSU_GlobalLists__c"
+                value={selectedRecordId}
+                matching-info={matchingInfo}
+                display-info={displayInfo}
+                filter={recordTypeFilter}
+                onchange={handleChange}
+                data-id="idRecordPicker">
+            </lightning-record-picker>
+        </div>
+            <!-- Pills -->
+        <div class="slds-m-top_small slds-grid slds-wrap" if:true={hasSelectedRecords}>
+                <template for:each={selectedRecords} for:item="record">
+                    <div key={record.id} class="slds-m-bottom_x-small slds-p-right_x-small">
+                            <lightning-pill
+                                class="classRecordPill"
+                                label={record.name}
+                                name={record.id}
+                                data-record-id={record.id}
+                                onremove={handleRemovePill}>
+                            </lightning-pill>
+                    </div>
+                </template>
+        </div>
+    </div>
+
+    
+</template>

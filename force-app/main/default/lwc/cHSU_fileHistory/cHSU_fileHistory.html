@@ -1,0 +1,29 @@
+<template>
+    <lightning-card title="Historial de Expediente" icon-name="standard:task">
+        <lightning-spinner data-id="idSpinner"></lightning-spinner>
+
+        <template if:true={historial}>
+            <lightning-datatable
+                key-field="numeroExpediente"
+                data={historial}
+                columns={columns}
+                onrowaction={handleRowAction}
+                hide-checkbox-column
+                class="slds-m-around_medium">
+            </lightning-datatable>
+        </template>
+
+        <template if:true={error}>
+            <lightning-button-icon
+                slot="actions"
+                icon-name="utility:loop"
+                alternative-text="Recargar"
+                title="Recargar"
+                onclick={handleReload}>
+            </lightning-button-icon>
+            <div class="slds-box slds-box_x-small slds-notify slds-notify_alert slds-alert_error custom-error">
+                <lightning-formatted-text value={error} class="slds-p-around_small"></lightning-formatted-text>
+            </div>
+        </template>
+    </lightning-card>
+</template>

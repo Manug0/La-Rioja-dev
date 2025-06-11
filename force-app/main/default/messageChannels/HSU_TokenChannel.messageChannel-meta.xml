@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<LightningMessageChannel xmlns="http://soap.sforce.com/2006/04/metadata">
+    <description>Canal para solicitar y recibir el token entre LWCs</description>
+    <isExposed>true</isExposed>
+    <lightningMessageFields>
+        <description>Indica si es solicitud o respuesta de token</description>
+        <fieldName>action</fieldName>
+    </lightningMessageFields>
+    <lightningMessageFields>
+        <description>El valor del token</description>
+        <fieldName>token</fieldName>
+    </lightningMessageFields>
+    <masterLabel>HSU Token Channel</masterLabel>
+</LightningMessageChannel>

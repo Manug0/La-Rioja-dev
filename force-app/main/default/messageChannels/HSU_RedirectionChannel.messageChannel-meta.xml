@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<LightningMessageChannel xmlns="http://soap.sforce.com/2006/04/metadata">
+    <description>Canal para gestionar redirecciones entre componentes LWC</description>
+    <isExposed>true</isExposed>
+    <lightningMessageFields>
+        <description>Tipo de objeto a redireccionar</description>
+        <fieldName>objectType</fieldName>
+    </lightningMessageFields>
+    <lightningMessageFields>
+        <description>ID del registro a redireccionar</description>
+        <fieldName>recordId</fieldName>
+    </lightningMessageFields>
+    <lightningMessageFields>
+        <description>Sistema de redirección (CaseDetail, PersonDetail, etc.)</description>
+        <fieldName>sistema</fieldName>
+    </lightningMessageFields>
+    <lightningMessageFields>
+        <description>Datos adicionales para la redirección</description>
+        <fieldName>additionalData</fieldName>
+    </lightningMessageFields>
+    <masterLabel>HSU Redirection Channel</masterLabel>
+</LightningMessageChannel>

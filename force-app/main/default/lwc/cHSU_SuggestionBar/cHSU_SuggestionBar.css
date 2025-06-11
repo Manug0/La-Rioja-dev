@@ -1,0 +1,102 @@
+.contenedor {
+    padding: 1rem;
+    background: #fefefe;
+    border-top: 1px solid #ccc;
+    box-shadow: 0 -2px 5px rgba(0,0,0,0.1);
+    border-radius: 8px;
+}
+
+.cabecera {
+    font-weight: bold;
+    font-size: 1.2rem;
+    margin-bottom: 0.75rem;
+}
+
+.campo {
+    margin-bottom: 1rem;
+}
+
+.botonera {
+    margin-top: 1rem;
+}
+
+.mensaje {
+    margin-top: 1rem;
+    font-size: 0.9rem;
+}
+
+.custom-alert {
+    margin-bottom: 1rem;
+    animation: fadeIn 0.5s;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+/* Alerta de éxito */
+.success-alert {
+    --slds-c-alert-color-background: #5a783a;
+    --slds-c-alert-color-border: #5a783a;
+    --slds-c-alert-text-color: white;
+    margin-top: 2rem;
+}
+
+.success-alert .alert-icon {
+    --slds-c-icon-color-foreground-default: white;
+}
+
+.success-alert .close-button {
+    --slds-c-button-color-foreground: white;
+}
+
+.success-alert a {
+    color: white;
+    text-decoration: underline;
+    margin-left: 0.5rem;
+    font-weight: normal;
+}
+
+.success-alert a:hover {
+    color: #f0f0f0;
+}
+
+/* Alerta de error */
+.error-alert {
+    --slds-c-alert-color-background: #c23934;
+    --slds-c-alert-color-border: #c23934;
+    --slds-c-alert-text-color: white;
+    margin-top: 2rem;
+
+}
+
+.error-alert .alert-icon {
+    --slds-c-icon-color-foreground-default: white;
+}
+
+.error-alert .close-button {
+    --slds-c-button-color-foreground: white;
+}
+
+.error-details {
+    display: block;
+    font-size: 0.875rem;
+    font-weight: normal;
+    margin-top: 0.25rem;
+    opacity: 0.9;
+}
+
+/* Botones con bordes más suaves */
+.botonera lightning-button {
+    border-radius: 6px;
+}
+
+/* Campos de entrada con bordes más suaves */
+.campo lightning-input-field {
+    border-radius: 6px;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+

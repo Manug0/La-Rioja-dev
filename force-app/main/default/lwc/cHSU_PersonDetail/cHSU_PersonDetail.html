@@ -1,0 +1,110 @@
+<!--
+  @description       : 
+  @author            : ChangeMeIn@UserSettingsUnder.SFDoc
+  @group             : 
+  @last modified on  : 05-21-2025
+  @last modified by  : ChangeMeIn@UserSettingsUnder.SFDoc
+-->
+<template>
+    <lightning-card>
+        
+        <template lwc:if={data}>
+            <lightning-accordion allow-multiple-sections-open active-section-name="Detalle">
+                <lightning-accordion-section name="Detalle" label="Detalle">
+                    <lightning-layout multiple-rows="true">
+                        <lightning-layout-item size="12" class="slds-p-horizontal_x-small">
+                            <lightning-input type="text" class="slds-form-element slds-form-element_readonly" label="Nombre completo" value={data.nombreCompleto} readonly></lightning-input>
+                        </lightning-layout-item>
+                        <lightning-layout-item size="6" class="slds-p-horizontal_x-small">
+                            <lightning-input type="text" class="slds-form-element slds-form-element_readonly" label="DNI / NIF / Pasaporte" value={data.dni} readonly></lightning-input>
+                        </lightning-layout-item>
+                        <lightning-layout-item size="6" class="slds-p-horizontal_x-small">
+                            <lightning-input type="text" class="slds-form-element slds-form-element_readonly" label="Sexo" value={data.sexo} readonly></lightning-input>
+                        </lightning-layout-item>
+                        <lightning-layout-item size="6" class="slds-p-horizontal_x-small">
+                            <lightning-input type="email" class="slds-form-element slds-form-element_readonly" label="Correo electrónico" value={data.mail} readonly></lightning-input>
+                        </lightning-layout-item>
+                        <lightning-layout-item size="6" class="slds-p-horizontal_x-small">
+                            <lightning-input type="tel" class="slds-form-element slds-form-element_readonly" label="Teléfono" value={data.telefono} readonly></lightning-input>
+                        </lightning-layout-item>
+                        <lightning-layout-item size="6" class="slds-p-horizontal_x-small">
+                            <lightning-input type="date" class="slds-form-element slds-form-element_readonly" date-style="short" label="Fecha nacimiento" value={data.fechaNacimiento} readonly></lightning-input>
+                        </lightning-layout-item>
+                        <lightning-layout-item size="6" class="slds-p-horizontal_x-small">
+                            <lightning-input type="text" class="slds-form-element slds-form-element_readonly" label="Nacionalidad" value={data.nacionalidad} readonly></lightning-input>
+                        </lightning-layout-item>
+                        <lightning-layout-item size="6" class="slds-p-horizontal_x-small">
+                            <lightning-input type="text" class="slds-form-element slds-form-element_readonly" label="País Nacimiento" value={data.paisNacimiento} readonly></lightning-input>
+                        </lightning-layout-item>
+                    </lightning-layout>
+                </lightning-accordion-section>
+                <lightning-accordion-section name="Social" label="Social">
+                    <lightning-layout multiple-rows="true">
+                        <lightning-layout-item size="6" class="slds-p-horizontal_x-small">
+                            <lightning-input type="text" class="slds-form-element slds-form-element_readonly" label="Tarjeta sanitaria" value={data.tarjetaSanitaria} readonly></lightning-input>
+                        </lightning-layout-item>
+                        <lightning-layout-item size="6" class="slds-p-horizontal_x-small">
+                            <lightning-input type="text" class="slds-form-element slds-form-element_readonly" label="UTS" value={data.unidadDeTrabajoSocial} readonly></lightning-input>
+                        </lightning-layout-item>
+                        <lightning-layout-item size="6" class="slds-p-horizontal_x-small">
+                            <lightning-input type="text" class="slds-form-element slds-form-element_readonly" label="UTS de referencia" value={data.unidadDetrabajoSocialDeReferencia} readonly></lightning-input>
+                        </lightning-layout-item>
+                        <lightning-layout-item size="6" class="slds-p-horizontal_x-small">
+                            <lightning-input type="text" class="slds-form-element slds-form-element_readonly" label="Grado de dependencia" value={data.gradoDeDependencia} readonly></lightning-input>
+                        </lightning-layout-item>
+                        <lightning-layout-item size="6" class="slds-p-horizontal_x-small">
+                            <lightning-input type="text" class="slds-form-element slds-form-element_readonly" label="Grado discapacidad" value={data.gradoDeDiscapacidad} readonly></lightning-input>
+                        </lightning-layout-item>
+                    </lightning-layout>
+                </lightning-accordion-section>
+                    <lightning-accordion-section name="direccion" label="Dirección">
+                        <lightning-layout multiple-rows="true">
+                            <lightning-layout-item size="6" class="slds-p-horizontal_x-small">
+                                <lightning-input class="slds-form-element_readonly" label="Tipo de vía" value={data.direccion.tipoDeVia} readonly></lightning-input>
+                            </lightning-layout-item>
+                            <lightning-layout-item size="6" class="slds-p-horizontal_x-small">
+                                <lightning-input class="slds-form-element_readonly" label="Nombre vía" value={data.direccion.nombreVia} readonly></lightning-input>
+                            </lightning-layout-item>
+                            <lightning-layout-item size="6" class="slds-p-horizontal_x-small">
+                                <lightning-input class="slds-form-element_readonly" label="Número" value={data.direccion.numero} type="text" readonly></lightning-input>
+                            </lightning-layout-item>
+                            <lightning-layout-item size="6" class="slds-p-horizontal_x-small">
+                                <lightning-input class="slds-form-element_readonly" label="Portal" value={data.direccion.portal} readonly></lightning-input>
+                            </lightning-layout-item>
+                            <lightning-layout-item size="6" class="slds-p-horizontal_x-small">
+                                <lightning-input class="slds-form-element_readonly" label="Piso" value={data.direccion.piso} readonly></lightning-input>
+                            </lightning-layout-item>
+                            <lightning-layout-item size="6" class="slds-p-horizontal_x-small">
+                                <lightning-input class="slds-form-element_readonly" label="Puerta" value={data.direccion.puerta} readonly></lightning-input>
+                            </lightning-layout-item>
+                            <lightning-layout-item size="6" class="slds-p-horizontal_x-small">
+                                <lightning-input class="slds-form-element_readonly" label="CP" value={data.direccion.cp} type="text" readonly></lightning-input>
+                            </lightning-layout-item>
+                            <lightning-layout-item size="6" class="slds-p-horizontal_x-small">
+                                <lightning-input class="slds-form-element_readonly" label="Provincia" value={data.direccion.provincia} readonly></lightning-input>
+                            </lightning-layout-item>
+                            <lightning-layout-item size="6" class="slds-p-horizontal_x-small">
+                                <lightning-input class="slds-form-element_readonly" label="Municipio" value={data.direccion.municipio} readonly></lightning-input>
+                            </lightning-layout-item>
+                            <lightning-layout-item size="6" class="slds-p-horizontal_x-small">
+                                <lightning-input class="slds-form-element_readonly" label="Localidad" value={data.direccion.localidad} readonly></lightning-input>
+                            </lightning-layout-item>
+                        </lightning-layout>
+                    </lightning-accordion-section>
+
+            </lightning-accordion>
+        </template>
+        <template lwc:elseif={error}>
+            <lightning-button-icon slot="actions" icon-name="utility:loop" alternative-text="Refrescar" title="Refrescar" onclick={handleReload}></lightning-button-icon>
+            <div class="slds-box slds-box_x-small slds-notify slds-notify_alert slds-alert_error">
+                <lightning-formatted-text value={error} class="slds-p-around_small"></lightning-formatted-text>
+            </div>
+        </template>
+        <template lwc:else>
+            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 120px;">
+                <lightning-spinner alternative-text="Cargando" size="medium"></lightning-spinner>
+                <lightning-formatted-text value="Cargando datos" data-id="idTextLoading" style="margin-top: 4rem;"></lightning-formatted-text>
+            </div>
+        </template>    
+    </lightning-card>    
+</template>

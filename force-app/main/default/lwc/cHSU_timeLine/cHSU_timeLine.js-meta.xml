@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<LightningComponentBundle xmlns="http://soap.sforce.com/2006/04/metadata" fqn="timeline">
+    <apiVersion>63.0</apiVersion>
+    <isExposed>true</isExposed>
+    <masterLabel>Línea temporal</masterLabel>
+    <targets>
+        <target>lightning__RecordPage</target>
+        <target>lightningCommunity__Page</target>
+        <target>lightningCommunity__Default</target>
+    </targets>
+    <targetConfigs>
+        <targetConfig targets="lightning__RecordPage">
+            <property name="timelineTitle" label="Título" default="Línea de tiempo" required="true" type="String" />
+            <property name="preferredHeight" label="Altura" default="3 - Por defecto" required="true" type="String" datasource="1 - Muy pequeño, 2 - Pequeño, 3 - Por defecto, 4 - Grande, 5 - Muy grande" />
+            <property name="iconStyle" label="Estilo del icono" default="Cuadrado" required="true" type="String" datasource="Cuadrado, Circular" />
+            <property name="earliestRange" label="Rango histórico (años)" default="1" required="true" type="String" datasource="0.25, 0.5, 1, 1.5, 2, 3, 4, 5, 6, 7, 8, 9, 10" description="Indica cuántos años atrás se muestra la línea de tiempo. Es n menos la fecha actual."/>
+            <property name="latestRange" label="Rango futuro (años)" default="0.25" required="true" type="String" datasource="0.25, 0.5, 1, 1.5, 2, 3, 4, 5, 6, 7, 8, 9, 10" description="Indica cuántos años hacia adelante se muestra la línea de tiempo. Es n más la fecha actual."/>
+            <property name="daysToShow" label="Rango de zoom (días)" default="60" required="true" type="Integer" min="7" max="365" description="Indica cuántos días mostrar por defecto en el zoom. Ejemplo: 60 días mostrará 30 antes y 30 después de la referencia de zoom."/>
+            <property name="showToday" label="Mostrar hoy" default="No" required="true" type="String" description="Muestra la fecha de hoy en la línea temporal." datasource="No, Azul, Negro, Verde, Indigo, Rosa, Purpura, Turquesa, Rojo"/>
+            <supportedFormFactors>
+                <supportedFormFactor type="Large" />
+            </supportedFormFactors>
+        </targetConfig>
+        <targetConfig targets="lightningCommunity__Default">
+            <property name="timelineTitle" label="Título" default="Línea de tiempo" required="true" type="String" />
+            <property name="preferredHeight" label="Altura" default="3 - Por defecto" required="true" type="String" datasource="1 - Muy pequeño, 2 - Pequeño, 3 - Por defecto, 4 - Grande, 5 - Muy grande" />
+            <property name="iconStyle" label="Estilo del icono" default="Cuadrado" required="true" type="String" datasource="Cuadrado, Circular" />
+            <property name="earliestRange" label="Rango histórico (años)" default="3" required="true" type="String" datasource="0.25, 0.5, 1, 1.5, 2, 3, 4, 5, 6, 7, 8, 9, 10" description="Indica cuántos años atrás se muestra la línea de tiempo. Es n menos la fecha actual."/>
+            <property name="latestRange" label="Rango futuro (años)" default="0.5" required="true" type="String" datasource="0.25, 0.5, 1, 1.5, 2, 3, 4, 5, 6, 7, 8, 9, 10" description="Indica cuántos años hacia adelante se muestra la línea de tiempo. Es n más la fecha actual."/>
+            <property name="daysToShow" label="Rango de zoom (días)" default="60" required="true" type="Integer" min="7" max="365" description="Indica cuántos días mostrar por defecto en el zoom. Ejemplo: 60 días mostrará 30 antes y 30 después de la referencia de zoom."/>
+            <property name="showToday" label="Mostrar hoy" default="No" required="true" type="String" description="Muestra la fecha de hoy en la línea temporal." datasource="No, Azul, Negro, Verde, Indigo, Rosa, Purpura, Turquesa, Rojo"/>
+            <property name="recordId" label="Id de registro" default="{!recordId}" type="String" description="Vincula automáticamente el id del registro de la página a la variable del componente" />
+        </targetConfig>
+    </targetConfigs>
+</LightningComponentBundle>

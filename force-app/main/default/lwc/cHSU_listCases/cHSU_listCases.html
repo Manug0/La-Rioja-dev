@@ -1,0 +1,50 @@
+<!--
+  @description       : 
+  @author            : ChangeMeIn@UserSettingsUnder.SFDoc
+  @group             : 
+  @last modified on  : 05-20-2025
+  @last modified by  : ChangeMeIn@UserSettingsUnder.SFDoc
+  Modifications Log
+  Ver   Date         Author                               Modification
+  1.0   05-13-2025   ChangeMeIn@UserSettingsUnder.SFDoc   Initial Version
+-->
+<template>
+	<div class="slds-card slds-card_boundary slds-card_related-list-fix">
+		<lightning-card icon-name="standard:case" title={titleCard}>
+			<div class="slds-p-horizontal_medium slds-p-bottom_small slds-text-body_small slds-text-color_weak">
+				Ordenado por: {sortedByLabel}
+			</div>
+			<template lwc:if={data}>
+				<lightning-layout multiple-rows="true">
+					<template for:each={data} for:item="item">
+							<lightning-layout-item key={item.numeroExpediente} size="12">
+								<lightning-button data-name={item.numeroExpediente} icon-name="utility:forward" variant="base" label={item.numeroExpediente} title="Ir a expediente" onclick={handleClickCase} class="slds-m-left_x-small"></lightning-button>
+							</lightning-layout-item>
+							<lightning-layout-item key={item.numeroExpediente} size="1">  </lightning-layout-item>
+							<lightning-layout-item key={item.numeroExpediente} size="6">
+								<lightning-input type="text" label="Estado" value={item.estado} readonly variant="label-inline"></lightning-input>
+							</lightning-layout-item>
+							<lightning-layout-item key={item.numeroExpediente} size="5">
+								<lightning-input type="text" label="Sistema" value={item.sistema} readonly variant="label-inline"></lightning-input>
+							</lightning-layout-item>
+					</template>
+				</lightning-layout>
+			</template>
+			<template lwc:elseif={error}>
+				<lightning-button-icon slot="actions" icon-name="utility:loop" alternative-text="Refrescar" title="Refrescar" onclick={handleReload}></lightning-button-icon>
+				<div class="slds-box slds-box_small">
+					<div class="slds-box slds-box_x-small slds-notify slds-notify_alert slds-alert_error">
+						<lightning-formatted-text value={error} class="slds-p-around_small"></lightning-formatted-text>
+					</div>
+				</div>
+				
+			</template>
+			<template lwc:else>
+				<div style="display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 120px;">
+					<lightning-spinner alternative-text="Cargando" size="medium"></lightning-spinner>
+					<lightning-formatted-text value="Cargando expedientes" data-id="idTextLoading" style="margin-top: 4rem;"></lightning-formatted-text>
+				</div>
+			</template>    
+		</lightning-card>
+	</div>
+</template>

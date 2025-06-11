@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Package xmlns="http://soap.sforce.com/2006/04/metadata">
+    <types>
+        <members>cHSU_fileHistory</members>
+        <members>cHSU_listCases</members>
+        <members>cHSU_listDocument</members>
+        <members>cHSU_listPersonAccount</members>
+        <members>cHSU_PersonDetail</members>
+        <members>cHSU_ldsUtils</members>
+        <members>cHSU_timeLine</members>
+        <name>LightningComponentBundle</name>
+    </types>
+    <types>
+        <members>HSU_listPersonAccount</members>
+        <name>ApexClass</name>
+    </types>
+    <types>
+        <members>HSU_TokenChannel</members>
+        <name>LightningMessageChannel</name>
+    </types>
+    <version>60.0</version>
+</Package>

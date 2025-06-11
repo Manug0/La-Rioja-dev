@@ -1,0 +1,80 @@
+<!--
+  @description       : 
+  @author            : ChangeMeIn@UserSettingsUnder.SFDoc
+  @group             : 
+  @last modified on  : 05-28-2025
+  @last modified by  : ChangeMeIn@UserSettingsUnder.SFDoc
+-->
+  <!--
+  @description       : 
+  @author            : ChangeMeIn@UserSettingsUnder.SFDoc
+  @group             : 
+  @last modified on  : 05-28-2025
+  @last modified by  : ChangeMeIn@UserSettingsUnder.SFDoc
+  Modifications Log
+  Ver   Date         Author                               Modification
+  1.0   05-13-2025   ChangeMeIn@UserSettingsUnder.SFDoc   Initial Version
+-->
+<template>
+	<div class="slds-card slds-card_boundary slds-card_related-list-fix">
+		<lightning-card title={titleCard} icon-name="standard:announcement">
+			<template lwc:if={data}>
+				<lightning-layout multiple-rows="true">
+					<template for:each={data} for:item="item">
+						<lightning-layout-item size="12" key={item.documentoAportado}>
+							<div class="slds-var-p-horizontal_medium slds-var-p-vertical_xx-small slds-tile slds-hint-parent">
+								<p><lightning-button data-name={item.documentoAportado} icon-name="utility:forward" variant="base" label={item.documentoAportado} class="slds-m-left_x-small" title="Ver documento" onclick={handleViewDocument}></lightning-button></p>
+								<dl class="slds-list_horizontal slds-wrap">
+									<dt class="slds-item_label slds-text-color_weak slds-truncate">Fecha de petición: </dt>
+									<dd class="slds-item_detail slds-truncate">
+										<lightning-formatted-date-time
+											value={item.fechaPeticion}
+											year="numeric"
+											month="2-digit"
+											day="2-digit"
+											time-zone="UTC">
+										</lightning-formatted-date-time>
+									</dd>
+									<dt class="slds-item_label slds-text-color_weak slds-truncate">Fecha de aportación: </dt>
+									<dd class="slds-item_detail slds-truncate">
+										<lightning-formatted-date-time
+											value={item.fechaAportada}
+											year="numeric"
+											month="2-digit"
+											day="2-digit"
+											time-zone="UTC">
+										</lightning-formatted-date-time>
+									</dd>
+								</dl>
+							</div>
+						</lightning-layout-item>
+						<!-- <lightning-layout-item size="1" key={item.documentoAportado}>
+							<lightning-button-icon data-name={item.documentoAportado} icon-name="action:download" onclick={handleDownload}></lightning-button-icon>
+						</lightning-layout-item>
+						<lightning-layout-item size="1" key={item.documentoAportado}></lightning-layout-item> -->
+					</template>
+				</lightning-layout>
+			</template>
+			<template lwc:elseif={error}>
+				<lightning-button-icon slot="actions" icon-name="utility:loop" alternative-text="Refrescar" title="Refrescar" onclick={handleReload}></lightning-button-icon>
+				<div class="slds-box slds-box_small">
+					<div class="slds-box slds-box_x-small slds-notify slds-notify_alert slds-alert_error">
+						<lightning-formatted-text value={error} class="slds-p-around_small"></lightning-formatted-text>
+					</div>
+				</div>
+				
+			</template>
+			<template lwc:else>
+				<div style="display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 120px;">
+					<lightning-spinner alternative-text="Cargando" size="medium"></lightning-spinner>
+					<lightning-formatted-text value="Cargando subsanaciones" data-id="idTextLoading" style="margin-top: 4rem;"></lightning-formatted-text>
+				</div>
+			</template>
+			<template lwc:if={showMoreVisible}>
+				<p data-id="idFooter" slot="footer">
+					<lightning-button variant="base" label={labelShowMore} title={labelShowMore} onclick={handleShowMore}></lightning-button>
+				</p>
+			</template>
+		</lightning-card>
+	</div>
+</template>

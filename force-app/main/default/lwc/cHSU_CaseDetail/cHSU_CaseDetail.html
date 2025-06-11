@@ -1,0 +1,207 @@
+<!--
+  @description       : 
+  @author            : ChangeMeIn@UserSettingsUnder.SFDoc
+  @group             : 
+  @last modified on  : 05-26-2025
+  @last modified by  : ChangeMeIn@UserSettingsUnder.SFDoc
+-->
+<template>
+    <lightning-card title="Detalle de Expediente">
+        <lightning-button-icon
+            slot="actions"
+            icon-name="utility:loop"
+            alternative-text="Recargar"
+            title="Recargar"
+            onclick={handleReload}
+            class="slds-m-left_x-small"
+            variant="border-filled"
+            disabled={isReloadDisabled}
+        ></lightning-button-icon>
+        <div class="slds-p-around_medium">
+            <template if:true={loading}>
+                <div class="slds-align_absolute-center slds-m-vertical_medium">
+                    <lightning-spinner alternative-text="Cargando"></lightning-spinner>
+                </div>
+            </template>
+            <template if:true={error}>
+                <div class="slds-box slds-box_x-small slds-notify slds-notify_alert slds-alert_error">
+                    <lightning-formatted-text value={error}></lightning-formatted-text>
+                </div>
+            </template>
+            
+            <!-- Sección de resumen -->
+            <template if:true={expediente}>
+                <div class="slds-m-bottom_medium">
+                    <lightning-layout multiple-rows="true">
+                        <lightning-layout-item size="6" class="slds-p-horizontal_x-small">
+                            <div class="slds-form-element slds-form-element_readonly">
+                                <label class="slds-form-element__label">Nombre</label>
+                                <div class="slds-form-element__control">
+                                    <div class="slds-form-element__static slds-p-vertical_x-small">
+                                        <a href="#"
+                                           onclick={handlePersonClick} 
+                                           class="slds-link"
+                                           title="Ver detalles de la persona">
+                                            {nombreCompletoPersona}
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </lightning-layout-item>
+                        <lightning-layout-item size="6" class="slds-p-horizontal_x-small">
+                            <lightning-input class="slds-form-element_readonly" label="Nº Expediente" value={expediente.numeroExpediente} readonly></lightning-input>
+                        </lightning-layout-item>
+                        <lightning-layout-item size="6" class="slds-p-horizontal_x-small">
+                            <lightning-input class="slds-form-element_readonly" label="Sistema" value={expediente.sistema} readonly></lightning-input>
+                        </lightning-layout-item>
+                        <lightning-layout-item size="6" class="slds-p-horizontal_x-small">
+                            <lightning-input class="slds-form-element_readonly" label="Estado" value={expediente.estadoExpediente} readonly></lightning-input>
+                        </lightning-layout-item>
+                    </lightning-layout>
+                </div>
+            </template>
+
+            <template if:true={expediente}>
+                <lightning-accordion allow-multiple-sections-open active-section-name="principales">
+                    <!-- Datos principales -->
+                    <lightning-accordion-section name="principales" label="Datos principales">
+                        <lightning-layout multiple-rows="true">
+                            <lightning-layout-item size="6" class="slds-p-horizontal_x-small">
+                                <lightning-input class="slds-form-element_readonly" label="Modelo" value={expediente.modelo} readonly></lightning-input>
+                            </lightning-layout-item>
+                            <lightning-layout-item size="6" class="slds-p-horizontal_x-small">
+                                <lightning-input class="slds-form-element_readonly" label="Tipo de gestión" value={expediente.tipoGestion} readonly></lightning-input>
+                            </lightning-layout-item>
+                            <lightning-layout-item size="6" class="slds-p-horizontal_x-small">
+                                <lightning-input class="slds-form-element_readonly" label="Centro" value={expediente.centro} readonly></lightning-input>
+                            </lightning-layout-item>
+                            <lightning-layout-item size="6" class="slds-p-horizontal_x-small">
+                                <lightning-input class="slds-form-element_readonly" label="Modalidad" value={expediente.modalidad} readonly></lightning-input>
+                            </lightning-layout-item>
+                        </lightning-layout>
+                    </lightning-accordion-section>
+                    <!-- Fechas -->
+                    <lightning-accordion-section name="fechas" label="Fechas">
+                        <lightning-layout multiple-rows="true">
+                            <lightning-layout-item size="6" class="slds-p-horizontal_x-small">
+                                <lightning-input class="slds-form-element_readonly" label="Registro" value={expediente.fechaRegistro} type="date" readonly></lightning-input>
+                            </lightning-layout-item>
+                            <lightning-layout-item size="6" class="slds-p-horizontal_x-small">
+                                <lightning-input class="slds-form-element_readonly" label="Inicio Solicitud" value={expediente.fechaInicioSolicitud} type="date" readonly></lightning-input>
+                            </lightning-layout-item>
+                            <lightning-layout-item size="6" class="slds-p-horizontal_x-small">
+                                <lightning-input class="slds-form-element_readonly" label="Propuesta" value={expediente.fechaPropuesta} type="date" readonly></lightning-input>
+                            </lightning-layout-item>
+                            <lightning-layout-item size="6" class="slds-p-horizontal_x-small">
+                                <lightning-input class="slds-form-element_readonly" label="Resolución" value={expediente.fechaResolucion} type="date" readonly></lightning-input>
+                            </lightning-layout-item>
+                            <lightning-layout-item size="6" class="slds-p-horizontal_x-small">
+                                <lightning-input class="slds-form-element_readonly" label="Ingreso" value={expediente.fechaIngreso} type="date" readonly></lightning-input>
+                            </lightning-layout-item>
+                            <lightning-layout-item size="6" class="slds-p-horizontal_x-small">
+                                <lightning-input class="slds-form-element_readonly" label="Nómina" value={expediente.fechaNomina} type="date" readonly></lightning-input>
+                            </lightning-layout-item>
+                            <lightning-layout-item size="6" class="slds-p-horizontal_x-small">
+                                <lightning-input class="slds-form-element_readonly" label="Fin" value={expediente.fechaFin} type="date" readonly></lightning-input>
+                            </lightning-layout-item>
+                            <lightning-layout-item size="6" class="slds-p-horizontal_x-small">
+                                <lightning-input class="slds-form-element_readonly" label="Archivo" value={expediente.fechaArchivo} type="date" readonly></lightning-input>
+                            </lightning-layout-item>
+                        </lightning-layout>
+                    </lightning-accordion-section>
+                    <!-- Documentos -->
+                    <lightning-accordion-section name="documentos" label="Documentos">
+                        <lightning-layout multiple-rows="true">
+                            <lightning-layout-item size="6" class="slds-p-horizontal_x-small">
+                                <lightning-input class="slds-form-element_readonly" label="Solicitud" value={expediente.documentoSolicitud} readonly></lightning-input>
+                            </lightning-layout-item>
+                            <lightning-layout-item size="6" class="slds-p-horizontal_x-small">
+                                <lightning-input class="slds-form-element_readonly" label="Comunicación" value={expediente.documentoComunicacion} readonly></lightning-input>
+                            </lightning-layout-item>
+                            <lightning-layout-item size="6" class="slds-p-horizontal_x-small">
+                                <lightning-input class="slds-form-element_readonly" label="Resolución" value={expediente.documentoResolucion} readonly></lightning-input>
+                            </lightning-layout-item>
+                        </lightning-layout>
+                    </lightning-accordion-section>
+                    <!-- Importes -->
+                    <lightning-accordion-section name="importes" label="Importes">
+                        <lightning-layout multiple-rows="true">
+                            <lightning-layout-item size="6" class="slds-p-horizontal_x-small">
+                                <lightning-input class="slds-form-element_readonly" label="Importe" value={expediente.importe} type="number" readonly></lightning-input>
+                            </lightning-layout-item>
+                            <lightning-layout-item size="6" class="slds-p-horizontal_x-small">
+                                <lightning-input class="slds-form-element_readonly" label="Coste" value={expediente.coste} type="number" readonly></lightning-input>
+                            </lightning-layout-item>
+                            <lightning-layout-item size="6" class="slds-p-horizontal_x-small">
+                                <lightning-input class="slds-form-element_readonly" label="Copago" value={expediente.copago} type="number" readonly></lightning-input>
+                            </lightning-layout-item>
+                            <lightning-layout-item size="6" class="slds-p-horizontal_x-small">
+                                <lightning-input class="slds-form-element_readonly" label="Prestación" value={expediente.prestacion} type="number" readonly></lightning-input>
+                            </lightning-layout-item>
+                        </lightning-layout>
+                    </lightning-accordion-section>
+                    <!-- Persona -->
+                    <lightning-accordion-section name="persona" label="Persona">
+                        <lightning-layout multiple-rows="true">
+                            <lightning-layout-item size="6" class="slds-p-horizontal_x-small">
+                                <lightning-input class="slds-form-element_readonly" label="DNI" value={expediente.persona.dni} readonly></lightning-input>
+                            </lightning-layout-item>
+                            <lightning-layout-item size="6" class="slds-p-horizontal_x-small">
+                                <lightning-input class="slds-form-element_readonly" label="Fecha nacimiento" value={expediente.persona.fechaNacimiento} type="date" readonly></lightning-input>
+                            </lightning-layout-item>
+                            <lightning-layout-item size="6" class="slds-p-horizontal_x-small">
+                                <lightning-input class="slds-form-element_readonly" label="Sexo" value={expediente.persona.sexo} readonly></lightning-input>
+                            </lightning-layout-item>
+                            <lightning-layout-item size="6" class="slds-p-horizontal_x-small">
+                                <lightning-input class="slds-form-element_readonly" label="Teléfono" value={expediente.persona.telefono} type="tel" readonly></lightning-input>
+                            </lightning-layout-item>
+                            <lightning-layout-item size="6" class="slds-p-horizontal_x-small">
+                                <lightning-input class="slds-form-element_readonly" label="Mail" value={expediente.persona.mail} type="email" readonly></lightning-input>
+                            </lightning-layout-item>
+                        </lightning-layout>
+                    </lightning-accordion-section>
+                    <!-- Dirección -->
+                    <lightning-accordion-section name="direccion" label="Dirección">
+                    <template if:true={expediente.persona.direccion}>
+                        <lightning-layout multiple-rows="true">
+                            <lightning-layout-item size="6" class="slds-p-horizontal_x-small">
+                                <lightning-input class="slds-form-element_readonly" label="Tipo de vía" value={expediente.persona.direccion.tipoDeVia} readonly></lightning-input>
+                            </lightning-layout-item>
+                            <lightning-layout-item size="6" class="slds-p-horizontal_x-small">
+                                <lightning-input class="slds-form-element_readonly" label="Nombre vía" value={expediente.persona.direccion.nombreVia} readonly></lightning-input>
+                            </lightning-layout-item>
+                            <lightning-layout-item size="6" class="slds-p-horizontal_x-small">
+                                <lightning-input class="slds-form-element_readonly" label="Número" value={expediente.persona.direccion.numero} type="number" readonly></lightning-input>
+                            </lightning-layout-item>
+                            <lightning-layout-item size="6" class="slds-p-horizontal_x-small">
+                                <lightning-input class="slds-form-element_readonly" label="Portal" value={expediente.persona.direccion.portal} readonly></lightning-input>
+                            </lightning-layout-item>
+                            <lightning-layout-item size="6" class="slds-p-horizontal_x-small">
+                                <lightning-input class="slds-form-element_readonly" label="Piso" value={expediente.persona.direccion.piso} readonly></lightning-input>
+                            </lightning-layout-item>
+                            <lightning-layout-item size="6" class="slds-p-horizontal_x-small">
+                                <lightning-input class="slds-form-element_readonly" label="Puerta" value={expediente.persona.direccion.puerta} readonly></lightning-input>
+                            </lightning-layout-item>
+                            <lightning-layout-item size="6" class="slds-p-horizontal_x-small">
+                                <lightning-input class="slds-form-element_readonly" label="CP" value={expediente.persona.direccion.cp} type="number" readonly></lightning-input>
+                            </lightning-layout-item>
+                            <lightning-layout-item size="6" class="slds-p-horizontal_x-small">
+                                <lightning-input class="slds-form-element_readonly" label="Provincia" value={expediente.persona.direccion.provincia} readonly></lightning-input>
+                            </lightning-layout-item>
+                            <lightning-layout-item size="6" class="slds-p-horizontal_x-small">
+                                <lightning-input class="slds-form-element_readonly" label="Municipio" value={expediente.persona.direccion.municipio} readonly></lightning-input>
+                            </lightning-layout-item>
+                            <lightning-layout-item size="6" class="slds-p-horizontal_x-small">
+                                <lightning-input class="slds-form-element_readonly" label="Localidad" value={expediente.persona.direccion.localidad} readonly></lightning-input>
+                            </lightning-layout-item>
+                        </lightning-layout>
+                    </template>
+                    <template if:false={expediente.persona.direccion}>
+                        <p class="slds-text-color_weak">No hay información de dirección disponible</p>
+                    </template>
+                    </lightning-accordion-section>
+                </lightning-accordion>
+            </template>
+        </div>
+    </lightning-card>
+</template>
