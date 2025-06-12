@@ -28,3 +28,4 @@ pipeline {
         failure { echo "Fallo en el despliegue a producción. Revisa el log de Jenkins." }
     }
 }
+// This Jenkinsfile is designed to deploy code to a Salesforce production environment.
