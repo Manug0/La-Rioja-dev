@@ -1,0 +1,57 @@
+pipeline {
+    agent any
+
+    environment {
+        SFDX_AUTH_URL = credentials('SFDX_AUTH_URL_PROD')
+        SFDX_ALIAS = 'hsu'
+        PACKAGE_DIR = 'force-app'
+    }
+//d
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Detect Merge to Production') {
+            when {
+                allOf {
+                    branch 'main'
+                    not { buildingTag() }
+                }
+            }
+            steps {
+                echo "Merge detectado a rama de producción. Iniciando despliegue..."
+            }
+        }
+
+        stage('Authenticate with Salesforce') {
+            when {
+                branch 'main'
+            }
+            steps {
+                sh 'echo $SFDX_AUTH_URL > ./auth_url.txt'
+                sh 'sfdx auth:sfdxurl:store -f ./auth_url.txt -a $SFDX_ALIAS'
+            }
+        }
+
+        stage('Deploy to Production') {
+            when {
+                branch 'main'
+            }
+            steps {
+                sh 'sfdx force:source:deploy -p $PACKAGE_DIR -u $SFDX_ALIAS --checkonly'
+                sh 'sfdx force:source:deploy -p $PACKAGE_DIR -u $SFDX_ALIAS --wait 30 --testlevel RunLocalTests'
+            }
+        }
+    }
+
+    post {
+        failure {
+            mail to: 'tu-email@dominio.com',
+                 subject: "Fallo en el despliegue a producción",
+                 body: "El despliegue automático a producción ha fallado. Revisa el log de Jenkins."
+        }
+    }
+}
