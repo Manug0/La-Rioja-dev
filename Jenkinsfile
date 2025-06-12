@@ -2,9 +2,13 @@ pipeline {
     agent any
 
     environment {
-        SFDX_AUTH_URL = credentials('SFDX_AUTH_URL_PROD')
-        SFDX_ALIAS = 'hsu'
+        // Credenciales para UAT y Producción
+        SFDX_AUTH_URL_UAT = credentials('SFDX_AUTH_URL_UAT')
+        SFDX_AUTH_URL_PROD = credentials('SFDX_AUTH_URL_PROD')
+        SFDX_ALIAS_UAT = 'uat'
+        SFDX_ALIAS_PROD = 'prod'
         PACKAGE_DIR = 'force-app'
+        SF_DISABLE_TELEMETRY = "true"
     }
 
     stages {
@@ -14,44 +18,48 @@ pipeline {
             }
         }
 
-        stage('Detect Merge to Production') {
-            when {
-                allOf {
-                    branch 'main'
-                    not { buildingTag() }
-                }
-            }
+        stage('Verificar SFDX y dependencias') {
             steps {
-                echo "Merge detectado a rama de producción. Iniciando despliegue..."
+                sh 'sfdx --version'
+                sh 'node --version'
             }
         }
 
-        stage('Authenticate with Salesforce') {
-            when {
-                branch 'main'
-            }
+        stage('Authenticate UAT') {
             steps {
-                sh 'echo $SFDX_AUTH_URL > ./auth_url.txt'
-                sh 'sfdx auth:sfdxurl:store -f ./auth_url.txt -a $SFDX_ALIAS'
+                sh 'echo $SFDX_AUTH_URL_UAT > ./auth_url_uat.txt'
+                sh 'sfdx auth:sfdxurl:store -f ./auth_url_uat.txt -a $SFDX_ALIAS_UAT'
             }
         }
 
-        stage('Deploy to Production') {
-            when {
-                branch 'main'
-            }
+        stage('Validar en UAT') {
             steps {
-                sh 'sfdx force:source:deploy -p $PACKAGE_DIR -u $SFDX_ALIAS --checkonly'
-                sh 'sfdx force:source:deploy -p $PACKAGE_DIR -u $SFDX_ALIAS --wait 30 --testlevel RunLocalTests'
+                sh 'sfdx force:source:deploy -p $PACKAGE_DIR -u $SFDX_ALIAS_UAT --checkonly --testlevel RunLocalTests'
+            }
+        }
+
+        stage('Authenticate Producción') {
+            steps {
+                sh 'echo $SFDX_AUTH_URL_PROD > ./auth_url_prod.txt'
+                sh 'sfdx auth:sfdxurl:store -f ./auth_url_prod.txt -a $SFDX_ALIAS_PROD'
+            }
+        }
+
+        stage('Desplegar a Producción') {
+            steps {
+                sh 'sfdx force:source:deploy -p $PACKAGE_DIR -u $SFDX_ALIAS_PROD --wait 30 --testlevel RunLocalTests'
             }
         }
     }
 
     post {
+        success {
+            echo "Validación y despliegue completados con éxito."
+        }
         failure {
             mail to: 'tu-email@dominio.com',
-                 subject: "Fallo en el despliegue a producción",
-                 body: "El despliegue automático a producción ha fallado. Revisa el log de Jenkins."
+                 subject: "Fallo en validación o despliegue",
+                 body: "El pipeline ha fallado. Revisa el log de Jenkins."
         }
     }
 }

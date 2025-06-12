@@ -1,0 +1,28 @@
+pipeline {
+    agent any
+    environment {
+        SFDX_AUTH_URL = credentials('SFDX_AUTH_URL_HSU')
+        SFDX_ALIAS = 'hsu'
+        PACKAGE_DIR = 'force-app'
+        SF_DISABLE_TELEMETRY = "true"
+    }
+    stages {
+        stage('Checkout') { steps { checkout scm } }
+        stage('Verificar SFDX') { steps { sh 'sfdx --version' } }
+        stage('Authenticate') {
+            steps {
+                sh 'echo $SFDX_AUTH_URL > ./auth_url.txt'
+                sh 'sfdx auth:sfdxurl:store -f ./auth_url.txt -a $SFDX_ALIAS'
+            }
+        }
+        stage('Validar código') {
+            steps {
+                sh 'sfdx force:source:deploy -p $PACKAGE_DIR -u $SFDX_ALIAS --checkonly --testlevel RunLocalTests'
+            }
+        }
+    }
+    post {
+        success { echo "Validación completada con éxito." }
+        failure { echo "Errores en la validación. Revisa el log de Jenkins." }
+    }
+}
