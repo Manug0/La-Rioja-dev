@@ -17,7 +17,7 @@ pipeline {
         stage('Detect Merge to Production') {
             when {
                 allOf {
-                    branch 'main' // o 'master' o el nombre de tu rama de producción
+                    branch 'main'
                     not { buildingTag() }
                 }
             }
@@ -28,7 +28,7 @@ pipeline {
 
         stage('Authenticate with Salesforce') {
             when {
-                branch 'main' // o 'master' o el nombre de tu rama de producción
+                branch 'main'
             }
             steps {
                 sh 'echo $SFDX_AUTH_URL > ./auth_url.txt'
@@ -38,7 +38,7 @@ pipeline {
 
         stage('Deploy to Production') {
             when {
-                branch 'main' // o 'master' o el nombre de tu rama de producción
+                branch 'main'
             }
             steps {
                 sh 'sfdx force:source:deploy -p $PACKAGE_DIR -u $SFDX_ALIAS --checkonly'
