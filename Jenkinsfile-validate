@@ -8,16 +8,16 @@ pipeline {
     }
     stages {
         stage('Checkout') { steps { checkout scm } }
-        stage('Verificar SFDX') { steps { sh 'sfdx --version' } }
+        stage('Verificar SFDX') { steps { bat 'sfdx --version' } }
         stage('Authenticate') {
             steps {
-                sh 'echo $SFDX_AUTH_URL > ./auth_url.txt'
-                sh 'sfdx auth:sfdxurl:store -f ./auth_url.txt -a $SFDX_ALIAS'
+                bat 'echo %SFDX_AUTH_URL% > auth_url.txt'
+                bat 'sfdx auth:sfdxurl:store -f auth_url.txt -a %SFDX_ALIAS%'
             }
         }
         stage('Validar código') {
             steps {
-                sh 'sfdx force:source:deploy -p $PACKAGE_DIR -u $SFDX_ALIAS --checkonly --testlevel RunLocalTests'
+                bat 'sfdx force:source:deploy -p %PACKAGE_DIR% -u %SFDX_ALIAS% --checkonly --testlevel RunLocalTests'
             }
         }
     }
