@@ -2,9 +2,8 @@ pipeline {
     agent any
 
     environment {
-        // Ajusta estos valores a tu entorno
-        SFDX_AUTH_URL = credentials('SFDX_AUTH_URL_PROD') // Configura este credential en Jenkins
-        SFDX_ALIAS = 'prod'
+        SFDX_AUTH_URL = credentials('SFDX_AUTH_URL_PROD')
+        SFDX_ALIAS = 'hsu'
         PACKAGE_DIR = 'force-app'
     }
 
