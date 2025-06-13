@@ -5,19 +5,20 @@ pipeline {
         SFDX_ALIAS = 'hsu'
         PACKAGE_DIR = 'force-app'
         SF_DISABLE_TELEMETRY = "true"
+        SF_CMD = 'C:\\Users\\Manu\\AppData\\Local\\sf\\client\\2.92.7-df40848\\bin\\sf.cmd'
     }
     stages {
         stage('Checkout') { steps { checkout scm } }
-        stage('Verificar SFDX') { steps { bat 'sf --version' } }
+        stage('Verificar SFDX') { steps { bat "${SF_CMD} --version" } }
         stage('Authenticate') {
             steps {
                 bat 'echo %SFDX_AUTH_URL% > auth_url.txt'
-                bat 'sf org login sfdx-url --sfdx-url-file auth_url.txt --alias %SFDX_ALIAS%'
+                bat "${SF_CMD} org login sfdx-url --sfdx-url-file auth_url.txt --alias %SFDX_ALIAS%"
             }
         }
         stage('Validar código') {
             steps {
-                bat 'sf project deploy validate --source-dir %PACKAGE_DIR% --target-org %SFDX_ALIAS% --test-level RunLocalTests'
+                bat "${SF_CMD} project deploy validate --source-dir %PACKAGE_DIR% --target-org %SFDX_ALIAS% --test-level RunLocalTests"
             }
         }
     }
@@ -26,4 +27,4 @@ pipeline {
         failure { echo "Errores en la validación. Revisa el log de Jenkins." }
     }
 }
-// This Jenkinsfile is designed to validate code in a Salesforce 
+// This Jenkinsfile is designed to validate code in a Salesforce
