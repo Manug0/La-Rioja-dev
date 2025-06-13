@@ -27,4 +27,4 @@ pipeline {
         failure { echo "Errores en la validación. Revisa el log de Jenkins." }
     }
 }
-// This Jenkinsfile is designed to validate code in a Salesforce
+// This Jenkinsfile is designed to validate code in a Salesforc
