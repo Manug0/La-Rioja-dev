@@ -56,7 +56,28 @@ private class HSU_UTSUpdater_TEST {
             HSU_UTSUpdater.updateUTS();
             System.assert(false, 'Se esperaba excepción');
         } catch (AuraHandledException e) {
-            System.assert(e.getMessage().contains('Error al obtener UTS'), 'Mensaje de error esperado');
+            System.debug('Mensaje de excepción: ' + e.getMessage());
+            System.assert(
+                e.getMessage() != null && e.getMessage().contains('Error al obtener UTS'),
+                'Mensaje de error esperado, recibido: ' + e.getMessage()
+            );
+        }
+        Test.stopTest();
+    }
+
+    @isTest
+    static void testUpdateSistemasError() {
+        Test.setMock(HttpCalloutMock.class, new MockError());
+        Test.startTest();
+        try {
+            HSU_SistemasUpdater.updateSistemas();
+            System.assert(false, 'Se esperaba excepción');
+        } catch (AuraHandledException e) {
+            System.debug('Mensaje de excepción: ' + e.getMessage());
+            System.assert(
+                e.getMessage() != null && e.getMessage().contains('Error al obtener Sistemas'),
+                'Mensaje de error esperado, recibido: ' + e.getMessage()
+            );
         }
         Test.stopTest();
     }
