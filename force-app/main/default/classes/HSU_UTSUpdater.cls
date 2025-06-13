@@ -42,10 +42,10 @@ public with sharing class HSU_UTSUpdater {
                     System.debug('Actualizados ' + toUpsert.size() + ' registros de UTS');
                 }
             } else {
-                throw new AuraHandledException('Error al obtener UTS: ' + res.getStatusCode() + ' - ' + res.getBody());
+                throw new AuraHandledException('Error al obtener UTS');
             }
         } catch (Exception ex) {
-            throw new AuraHandledException('Error procesando UTS: ' + ex.getMessage());
+            throw new AuraHandledException('Error al obtener UTS');
         }
     }
 }
