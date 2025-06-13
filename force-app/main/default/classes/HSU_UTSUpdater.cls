@@ -9,10 +9,13 @@ public with sharing class HSU_UTSUpdater {
         String token = HSU_getSessionTokenControl.getSessionToken();
 
         try {
-            Id recordTypeId = [SELECT Id FROM RecordType 
-                              WHERE SObjectType = 'HSU_GlobalLists__c' 
-                              AND DeveloperName = 'HSU_UTS' 
-                              LIMIT 1].Id;
+            Id recordTypeId = [
+                SELECT Id 
+                FROM RecordType 
+                WHERE SObjectType = 'HSU_GlobalLists__c' 
+                AND DeveloperName = 'HSU_UTS' 
+                LIMIT 1
+            ].Id;
 
             Http http = new Http();
             HttpRequest req = new HttpRequest();
@@ -23,7 +26,7 @@ public with sharing class HSU_UTSUpdater {
             req.setTimeout(60000);
 
             HttpResponse res = http.send(req);
-            
+
             if (res.getStatusCode() == 200) {
                 List<UTSDTO> utsList = (List<UTSDTO>) JSON.deserialize(res.getBody(), List<UTSDTO>.class);
                 List<HSU_GlobalLists__c> toUpsert = new List<HSU_GlobalLists__c>();
@@ -45,6 +48,7 @@ public with sharing class HSU_UTSUpdater {
                 throw new AuraHandledException('Error al obtener UTS');
             }
         } catch (Exception ex) {
+            System.debug('Error inesperado: ' + ex.getMessage());
             throw new AuraHandledException('Error al obtener UTS');
         }
     }
