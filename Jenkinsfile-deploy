@@ -1,0 +1,31 @@
+pipeline {
+    agent any
+    environment {
+        SFDX_AUTH_URL = credentials('SFDX_AUTH_URL_PRE')
+        SFDX_ALIAS = 'pre'
+        PACKAGE_DIR = 'force-app'
+        SF_DISABLE_TELEMETRY = "true"
+    }
+    stages {
+        stage('Checkout') { steps { checkout scm } }
+        stage('Verificar SFDX') { steps { sh 'sfdx --version' } }
+        stage('Authenticate') {
+            when { branch 'main' }
+            steps {
+                sh 'echo $SFDX_AUTH_URL > ./auth_url.txt'
+                sh 'sfdx auth:sfdxurl:store -f ./auth_url.txt -a $SFDX_ALIAS'
+            }
+        }
+        stage('Desplegar a Producción') {
+            when { branch 'main' }
+            steps {
+                sh 'sfdx force:source:deploy -p $PACKAGE_DIR -u $SFDX_ALIAS --wait 30 --testlevel RunLocalTests'
+            }
+        }
+    }
+    post {
+        success { echo "Despliegue a producción completado con éxito." }
+        failure { echo "Fallo en el despliegue a producción. Revisa el log de Jenkins." }
+    }
+}
+// This Jenkinsfile is designed to deploy code to a Salesforce production environment

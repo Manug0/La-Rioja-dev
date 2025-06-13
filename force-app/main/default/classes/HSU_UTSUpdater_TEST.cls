@@ -9,7 +9,8 @@ private class HSU_UTSUpdater_TEST {
             return res;
         }
     }
-    // Mock para respuesta de error
+
+    // Mock para respuesta de error (código 400)
     class MockError implements HttpCalloutMock {
         public HTTPResponse respond(HTTPRequest req) {
             HttpResponse res = new HttpResponse();
@@ -18,7 +19,8 @@ private class HSU_UTSUpdater_TEST {
             return res;
         }
     }
-    // Mock para respuesta mixta (algunos ya existen, otros no)
+
+    // Mock para respuesta con múltiples registros (algunos ya existen, otros no)
     class MockUpsert implements HttpCalloutMock {
         public HTTPResponse respond(HTTPRequest req) {
             HttpResponse res = new HttpResponse();
@@ -56,7 +58,11 @@ private class HSU_UTSUpdater_TEST {
             HSU_UTSUpdater.updateUTS();
             System.assert(false, 'Se esperaba excepción');
         } catch (AuraHandledException e) {
-            System.assert(e.getMessage().contains('Error al obtener UTS'), 'Mensaje de error esperado');
+            System.debug('Mensaje de excepción: ' + e.getMessage());
+            System.assert(
+                e.getMessage() != null && e.getMessage().contains('Error al obtener UTS'),
+                'Mensaje de error esperado, recibido: ' + e.getMessage()
+            );
         }
         Test.stopTest();
     }

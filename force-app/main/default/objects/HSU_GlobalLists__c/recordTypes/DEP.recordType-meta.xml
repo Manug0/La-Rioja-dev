@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <RecordType xmlns="http://soap.sforce.com/2006/04/metadata">
-    <fullName>HSU_UTS</fullName>
+    <fullName>DEP</fullName>
     <active>true</active>
-    <description>Tipo de registro para unidades de trabajo social</description>
-    <label>UTS</label>
+    <label>Dependencia</label>
 </RecordType>

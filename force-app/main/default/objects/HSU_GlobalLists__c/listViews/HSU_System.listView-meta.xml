@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ListView xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>HSU_System</fullName>
+    <columns>NAME</columns>
+    <columns>HSU_Label__c</columns>
+    <filterScope>Everything</filterScope>
+    <filters>
+        <field>RECORDTYPE</field>
+        <operation>equals</operation>
+        <value>HSU_GlobalLists__c.HSU_system</value>
+    </filters>
+    <label>Sistemas</label>
+</ListView>

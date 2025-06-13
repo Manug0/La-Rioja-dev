@@ -42,10 +42,10 @@ public with sharing class HSU_SistemasUpdater {
                     System.debug('Actualizados ' + toUpsert.size() + ' registros de Sistemas');
                 }
             } else {
-                throw new AuraHandledException('Error al obtener Sistemas: ' + res.getStatusCode() + ' - ' + res.getBody());
+                throw new AuraHandledException('Error al obtener Sistemas');
             }
         } catch (Exception ex) {
-            throw new AuraHandledException('Error procesando Sistemas: ' + ex.getMessage());
+            throw new AuraHandledException('Error al obtener Sistemas');
         }
     }
 }
