@@ -18,7 +18,7 @@ pipeline {
         }
         stage('Validar código') {
             steps {
-                bat "${SF_CMD} project deploy validate --source-dir force-app/main/default/objects --source-dir force-app/main/default/classes --target-org %SFDX_ALIAS% --test-level RunSpecifiedTests --tests HSU_SistemasUpdater_TEST,HSU_UTSUpdater_TEST"
+                bat "${SF_CMD} project deploy validate --source-dir force-app/main/default/objects --source-dir force-app/main/default/classes --target-org %SFDX_ALIAS% --test-level RunLocalTests"
             }
         }
     }
@@ -27,4 +27,4 @@ pipeline {
         failure { echo "Errores en la validación. Revisa el log de Jenkins." }
     }
 }
-// This Jenkinsfile is designed to validate code in a Salesforce
+// This Jenkinsfile is designed to validate code in a Salesforc
