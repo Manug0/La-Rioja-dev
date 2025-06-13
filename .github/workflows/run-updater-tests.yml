@@ -1,0 +1,25 @@
+name: Run Updater Apex Tests
+
+on:
+  push:
+    branches:
+      - dev
+      - main
+
+jobs:
+  test-updaters:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Salesforce CLI
+        uses: sfdx-actions/setup-sfdx@v2
+
+      - name: Authenticate to Salesforce
+        run: echo ${{ secrets.SFDX_AUTH_URL_HSU }} > auth_url.txt && sfdx auth:sfdxurl:store -f auth_url.txt -a hsu
+
+      - name: Run only Updater Apex Tests
+        run: |
+          sf force:apex:test:run -u hsu -c -r human -w 30 -t HSU_UTSUpdater_TEST,HSU_SistemasUpdater_TEST
