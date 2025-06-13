@@ -57,7 +57,7 @@ private class HSU_UTSUpdater_TEST {
         try {
             HSU_UTSUpdater.updateUTS();
             System.assert(false, 'Se esperaba excepción');
-        } catch (Exception e) {
+        } catch (AuraHandledException e) {
             System.debug('Mensaje de excepción: ' + e.getMessage());
             System.assert(
                 e.getMessage() != null && e.getMessage().contains('Error al obtener UTS'),
