@@ -18,7 +18,7 @@ pipeline {
         }
         stage('Validar código') {
             steps {
-                bat "${SF_CMD} project deploy validate --source-dir force-app/main/default/objects --source-dir force-app/main/default/classes --target-org %SFDX_ALIAS% --test-level RunLocalTests"
+                bat "${SF_CMD} project deploy validate --source-dir force-app/main/default/objects --source-dir force-app/main/default/classes --target-org %SFDX_ALIAS% --test-level RunSpecifiedTests --tests HSU_SistemasUpdater_TEST,HSU_UTSUpdater_TEST"
             }
         }
     }
