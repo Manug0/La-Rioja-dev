@@ -124,7 +124,7 @@ pipeline {
                     try {
                         if (fileExists('package\\package.xml')) {
                             echo "Validando con package.xml y tests específicos: ${env.TEST_FLAGS}"
-                            bat "${SF_CMD} project deploy validate --manifest package\\package.xml --test-level RunSpecifiedTests --tests ${env.TEST_FLAGS} --target-org %SFDX_ALIAS%"
+                            bat "${SF_CMD} project deploy validate --manifest package\\package.xml --test-level RunSpecifiedTests ${env.TEST_FLAGS} --target-org %SFDX_ALIAS%"
                         } else {
                             echo "Package.xml no encontrado, usando validación de directorios"
                             bat "${SF_CMD} project deploy validate --source-dir force-app/main/default/classes --target-org %SFDX_ALIAS% --test-level RunSpecifiedTests --tests ${env.TEST_FLAGS}"
