@@ -1,0 +1,31 @@
+# Configuración de tests para el pipeline de CI/CD
+
+tests:
+  # Tests principales que siempre se ejecutan
+  core_tests:
+    - HSU_SistemasUpdater_TEST
+    - HSU_UTSUpdater_TEST
+  
+  # Tests adicionales que se pueden incluir según el contexto
+  additional_tests:
+    # - HSU_GlobalLists_TEST
+    # - HSU_Utils_TEST
+  
+  # Tests que se ejecutan solo en deploy a producción
+  production_tests:
+    # - HSU_Integration_TEST
+    # - HSU_DataValidation_TEST
+
+# Configuración por ambiente
+environments:
+  development:
+    test_level: "RunSpecifiedTests"
+    tests: ["HSU_SistemasUpdater_TEST", "HSU_UTSUpdater_TEST"]
+  
+  staging:
+    test_level: "RunLocalTests"
+    tests: []
+  
+  production:
+    test_level: "RunAllTestsInOrg"
+    tests: []
