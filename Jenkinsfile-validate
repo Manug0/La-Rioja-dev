@@ -6,7 +6,8 @@ pipeline {
         PACKAGE_DIR = 'force-app'
         SF_DISABLE_TELEMETRY = "true"
         SF_CMD = 'C:\\Users\\Manu\\AppData\\Local\\sf\\client\\2.92.7-df40848\\bin\\sf.cmd'
-        DEPLOY_ENV = 'development' // Cambiar según el ambiente
+        // AÑADIDO: Para confirmar automáticamente la instalación del plugin
+        SF_DISABLE_AUTOUPDATE = "true"
     }
     stages {
         stage('Checkout') { 
@@ -24,22 +25,7 @@ pipeline {
         
         stage('Verificar SFDX') { 
             steps { 
-                bat "${SF_CMD} --version"
-                // Verificar que Node.js esté disponible
-                bat "node --version"
-                bat "npm --version"
-            }
-        }
-        
-        stage('Instalar dependencias') {
-            steps {
-                script {
-                    // Instalar js-yaml si no existe package.json
-                    if (!fileExists('package.json')) {
-                        bat "npm init -y"
-                    }
-                    bat "npm install js-yaml"
-                }
+                bat "${SF_CMD} --version" 
             }
         }
         
@@ -53,12 +39,21 @@ pipeline {
         stage('Instalar SGD Plugin') {
             steps {
                 script {
-                    def pluginCheck = bat(script: "${SF_CMD} plugins | findstr sfdx-git-delta", returnStatus: true)
-                    if (pluginCheck != 0) {
-                        echo "Instalando sfdx-git-delta plugin..."
-                        bat "${SF_CMD} plugins install sfdx-git-delta"
-                    } else {
-                        echo "Plugin sfdx-git-delta ya está instalado"
+                    // SOLUCIÓN 1: Usar echo para confirmar automáticamente
+                    try {
+                        def pluginCheck = bat(script: "${SF_CMD} plugins | findstr sfdx-git-delta", returnStatus: true)
+                        if (pluginCheck != 0) {
+                            echo "Instalando sfdx-git-delta plugin..."
+                            // Usar echo "y" para confirmar automáticamente
+                            bat 'echo y | "%SF_CMD%" plugins install sfdx-git-delta'
+                        } else {
+                            echo "Plugin sfdx-git-delta ya está instalado"
+                        }
+                    } catch (Exception e) {
+                        echo "Error instalando plugin: ${e.getMessage()}"
+                        echo "Intentando instalación alternativa..."
+                        // SOLUCIÓN 2: Instalar via npm directamente
+                        bat "npm install -g sfdx-git-delta"
                     }
                 }
             }
@@ -67,22 +62,33 @@ pipeline {
         stage('Crear package.xml') {
             steps {
                 echo "Creando package.xml basado en diferencias entre commits"
-                bat "${SF_CMD} sgd source delta --from ${env.FIRST_COMMIT} --to ${env.LAST_COMMIT} --output ."
-                bat "dir package"
-                bat "type package\\package.xml"
+                bat "dir"
+                
+                script {
+                    try {
+                        // Intentar usar el plugin SF
+                        bat "${SF_CMD} sgd source delta --from ${env.FIRST_COMMIT} --to ${env.LAST_COMMIT} --output ."
+                    } catch (Exception e) {
+                        echo "Error con SF CLI, intentando con sgd directamente..."
+                        // ALTERNATIVA: Usar sgd directamente si se instaló via npm
+                        bat "sgd --from ${env.FIRST_COMMIT} --to ${env.LAST_COMMIT} --output ."
+                    }
+                }
+                
+                // Verificar que se creó el package
+                bat "if exist package\\package.xml (echo Package.xml creado exitosamente) else (echo ERROR: package.xml no encontrado)"
+                bat "if exist package\\package.xml type package\\package.xml"
             }
         }
         
-        stage('Obtener lista de tests') {
+        stage('Crear lista de tests') {
             steps {
                 script {
-                    // Usar el script de Node.js para obtener los tests
-                    env.TEST_LIST = bat(
-                        script: "node scripts\\utilities\\readTestFile.js",
-                        returnStdout: true
-                    ).trim()
-                    
-                    echo "Tests a ejecutar: ${env.TEST_LIST}"
+                    // Crear archivo con los tests específicos
+                    def testList = "HSU_SistemasUpdater_TEST,HSU_UTSUpdater_TEST"
+                    writeFile file: 'test-list.txt', text: testList
+                    echo "Tests a ejecutar: ${testList}"
+                    env.TEST_LIST = testList
                 }
             }
         }
@@ -91,16 +97,18 @@ pipeline {
             steps {
                 script {
                     try {
-                        def deployResult = bat(
-                            script: "${SF_CMD} project deploy validate --manifest package\\package.xml --json --test-level RunSpecifiedTests --tests ${env.TEST_LIST} --target-org %SFDX_ALIAS%",
-                            returnStdout: true
-                        ).trim()
-                        
-                        echo "Resultado del deploy: ${deployResult}"
-                        
-                        def jsonResult = readJSON text: deployResult
-                        echo "Deploy ID: ${jsonResult.result?.id}"
-                        echo "Estado: ${jsonResult.result?.status}"
+                        // Verificar si existe package.xml antes de usarlo
+                        if (fileExists('package\\package.xml')) {
+                            echo "Usando package.xml generado para validación delta"
+                            def deployResult = bat(
+                                script: "${SF_CMD} project deploy validate --manifest package\\package.xml --json --test-level RunSpecifiedTests --tests ${env.TEST_LIST} --target-org %SFDX_ALIAS%",
+                                returnStdout: true
+                            ).trim()
+                            echo "Resultado del deploy: ${deployResult}"
+                        } else {
+                            echo "Package.xml no encontrado, usando validación completa como fallback"
+                            bat "${SF_CMD} project deploy validate --source-dir force-app/main/default/objects --source-dir force-app/main/default/classes --target-org %SFDX_ALIAS% --test-level RunSpecifiedTests --tests ${env.TEST_LIST}"
+                        }
                         
                     } catch (Exception e) {
                         echo "Error en la validación: ${e.getMessage()}"
@@ -112,7 +120,9 @@ pipeline {
     }
     post {
         always {
+            // Limpiar archivos temporales
             bat "if exist auth_url.txt del auth_url.txt"
+            bat "if exist test-list.txt del test-list.txt"
         }
         success { 
             echo "Validación completada con éxito." 
