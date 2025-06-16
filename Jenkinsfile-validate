@@ -6,25 +6,120 @@ pipeline {
         PACKAGE_DIR = 'force-app'
         SF_DISABLE_TELEMETRY = "true"
         SF_CMD = 'C:\\Users\\Manu\\AppData\\Local\\sf\\client\\2.92.7-df40848\\bin\\sf.cmd'
+        DEPLOY_ENV = 'development' // Cambiar según el ambiente
     }
     stages {
-        stage('Checkout') { steps { checkout scm } }
-        stage('Verificar SFDX') { steps { bat "${SF_CMD} --version" } }
+        stage('Checkout') { 
+            steps { 
+                checkout scm 
+                script {
+                    // Obtener información de los commits para el delta
+                    env.FIRST_COMMIT = bat(script: "git rev-parse HEAD~1", returnStdout: true).trim()
+                    env.LAST_COMMIT = bat(script: "git rev-parse HEAD", returnStdout: true).trim()
+                    echo "First commit: ${env.FIRST_COMMIT}"
+                    echo "Last commit: ${env.LAST_COMMIT}"
+                }
+            }
+        }
+        
+        stage('Verificar SFDX') { 
+            steps { 
+                bat "${SF_CMD} --version"
+                // Verificar que Node.js esté disponible
+                bat "node --version"
+                bat "npm --version"
+            }
+        }
+        
+        stage('Instalar dependencias') {
+            steps {
+                script {
+                    // Instalar js-yaml si no existe package.json
+                    if (!fileExists('package.json')) {
+                        bat "npm init -y"
+                    }
+                    bat "npm install js-yaml"
+                }
+            }
+        }
+        
         stage('Authenticate') {
             steps {
                 bat 'echo %SFDX_AUTH_URL% > auth_url.txt'
                 bat "${SF_CMD} org login sfdx-url --sfdx-url-file auth_url.txt --alias %SFDX_ALIAS%"
             }
         }
+        
+        stage('Instalar SGD Plugin') {
+            steps {
+                script {
+                    def pluginCheck = bat(script: "${SF_CMD} plugins | findstr sfdx-git-delta", returnStatus: true)
+                    if (pluginCheck != 0) {
+                        echo "Instalando sfdx-git-delta plugin..."
+                        bat "${SF_CMD} plugins install sfdx-git-delta"
+                    } else {
+                        echo "Plugin sfdx-git-delta ya está instalado"
+                    }
+                }
+            }
+        }
+        
+        stage('Crear package.xml') {
+            steps {
+                echo "Creando package.xml basado en diferencias entre commits"
+                bat "${SF_CMD} sgd source delta --from ${env.FIRST_COMMIT} --to ${env.LAST_COMMIT} --output ."
+                bat "dir package"
+                bat "type package\\package.xml"
+            }
+        }
+        
+        stage('Obtener lista de tests') {
+            steps {
+                script {
+                    // Usar el script de Node.js para obtener los tests
+                    env.TEST_LIST = bat(
+                        script: "node scripts\\utilities\\readTestFile.js",
+                        returnStdout: true
+                    ).trim()
+                    
+                    echo "Tests a ejecutar: ${env.TEST_LIST}"
+                }
+            }
+        }
+        
         stage('Validar código') {
             steps {
-                bat "${SF_CMD} project deploy validate --source-dir force-app/main/default/objects --source-dir force-app/main/default/classes --target-org %SFDX_ALIAS% --test-level RunLocalTests"
+                script {
+                    try {
+                        def deployResult = bat(
+                            script: "${SF_CMD} project deploy validate --manifest package\\package.xml --json --test-level RunSpecifiedTests --tests ${env.TEST_LIST} --target-org %SFDX_ALIAS%",
+                            returnStdout: true
+                        ).trim()
+                        
+                        echo "Resultado del deploy: ${deployResult}"
+                        
+                        def jsonResult = readJSON text: deployResult
+                        echo "Deploy ID: ${jsonResult.result?.id}"
+                        echo "Estado: ${jsonResult.result?.status}"
+                        
+                    } catch (Exception e) {
+                        echo "Error en la validación: ${e.getMessage()}"
+                        throw e
+                    }
+                }
             }
         }
     }
     post {
-        success { echo "Validación completada con éxito." }
-        failure { echo "Errores en la validación. Revisa el log de Jenkins." }
+        always {
+            bat "if exist auth_url.txt del auth_url.txt"
+        }
+        success { 
+            echo "Validación completada con éxito." 
+            echo "Tests ejecutados: ${env.TEST_LIST}"
+        }
+        failure { 
+            echo "Errores en la validación. Revisa el log de Jenkins." 
+        }
     }
 }
-// This Jenkinsfile is designed to validate code in a Salesforce
