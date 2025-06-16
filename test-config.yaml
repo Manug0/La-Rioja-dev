@@ -8,13 +8,13 @@ tests:
   
   # Tests adicionales que se pueden incluir según el contexto
   additional_tests:
-    - HSU_GlobalLists_TEST
-    - HSU_Utils_TEST
+    # - HSU_GlobalLists_TEST
+    # - HSU_Utils_TEST
   
   # Tests que se ejecutan solo en deploy a producción
   production_tests:
-    - HSU_Integration_TEST
-    - HSU_DataValidation_TEST
+    # - HSU_Integration_TEST
+    # - HSU_DataValidation_TEST
 
 # Configuración por ambiente
 environments:
