@@ -175,3 +175,5 @@ def createBasicPackage() {
     writeFile file: 'package/package.xml', text: packageXml
     echo "Package.xml básico creado"
 }
+
+// Fin del script
