@@ -9,9 +9,9 @@ pipeline {
     }
     
     // Solo ejecutar en PRs, no en pushes directos a main
-    when {
-        changeRequest()
-    }
+    // when {
+    //     changeRequest()
+    // }
     
     stages {
         stage('Checkout') { 
@@ -263,3 +263,4 @@ def createBasicPackage() {
     writeFile file: 'package/package.xml', text: packageXml
     echo "✅ Package.xml básico creado"
 }
+// Asegurarse de que la función esté disponible
