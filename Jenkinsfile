@@ -6,11 +6,26 @@ pipeline {
         PACKAGE_DIR = 'force-app'
         SF_DISABLE_TELEMETRY = "true"
         SF_CMD = 'C:\\Users\\Manu\\AppData\\Local\\sf\\client\\2.92.7-df40848\\bin\\sf.cmd'
+        
+        // Variables para GitHub Status API
+        GITHUB_TOKEN = credentials('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')
+        REPO_OWNER = 'Manug0'
+        REPO_NAME = 'La-Rioja-dev'
     }
+    
+    // Solo ejecutar en PRs, no en pushes directos a main
+    when {
+        changeRequest()
+    }
+    
     stages {
         stage('Checkout') { 
             steps { 
-                checkout scm 
+                checkout scm
+                script {
+                    // Establecer status como "pending" en GitHub
+                    updateGitHubStatus('pending', 'Validación en progreso...')
+                }
             }
         }
         
@@ -18,23 +33,19 @@ pipeline {
             steps {
                 script {
                     try {
-                        // Obtener commits de manera más robusta
                         def gitLog = bat(script: "git log --oneline -n 2", returnStdout: true).trim()
                         echo "Últimos 2 commits:"
                         echo gitLog
                         
-                        // Obtener commits específicos
                         def currentCommit = bat(script: "git rev-parse HEAD", returnStdout: true).trim()
                         def previousCommit = bat(script: "git rev-parse HEAD~1", returnStdout: true).trim()
                         
-                        // Limpiar valores
                         env.CURRENT_COMMIT = currentCommit.replaceAll(/[\r\n\s]/, '')
                         env.PREVIOUS_COMMIT = previousCommit.replaceAll(/[\r\n\s]/, '')
                         
                         echo "Commit actual: '${env.CURRENT_COMMIT}'"
                         echo "Commit anterior: '${env.PREVIOUS_COMMIT}'"
                         
-                        // Validar que los commits tienen el formato correcto (40 caracteres)
                         if (env.CURRENT_COMMIT.length() == 40 && env.PREVIOUS_COMMIT.length() == 40) {
                             env.COMMITS_VALID = "true"
                             echo "Commits válidos para generar delta"
@@ -67,14 +78,12 @@ pipeline {
         stage('Crear package.xml') {
             steps {
                 script {
-                    // Crear directorio package
                     bat "if not exist package mkdir package"
                     
                     if (env.COMMITS_VALID == "true") {
                         echo "Intentando crear package.xml con delta de commits..."
                         
                         try {
-                            // Verificar si el plugin está instalado
                             def pluginCheck = bat(script: "${SF_CMD} plugins | findstr sfdx-git-delta", returnStatus: true)
                             
                             if (pluginCheck == 0) {
@@ -97,10 +106,8 @@ pipeline {
                         createBasicPackage()
                     }
                     
-                    // Verificar resultado
                     bat "if exist package\\package.xml (echo Package.xml creado exitosamente) else (echo ERROR: package.xml no encontrado)"
                     
-                    // Mostrar contenido del package.xml
                     if (fileExists('package\\package.xml')) {
                         bat "type package\\package.xml"
                     }
@@ -111,7 +118,9 @@ pipeline {
         stage('Definir tests') {
             steps {
                 script {
-                    def testList = ["HSU_SistemasUpdater_TEST", "HSU_UTSUpdater_TEST"]
+                    def yamlText = readFile 'test-config.yaml'
+                    def yaml = new org.yaml.snakeyaml.Yaml().load(yamlText)
+                    def testList = yaml.tests.core_tests
                     env.TEST_FLAGS = testList.collect { "--tests ${it}" }.join(' ')
                     echo "Tests a ejecutar: ${testList}"
                 }
@@ -127,7 +136,7 @@ pipeline {
                             bat "${SF_CMD} project deploy validate --manifest package\\package.xml --test-level RunSpecifiedTests ${env.TEST_FLAGS} --target-org %SFDX_ALIAS%"
                         } else {
                             echo "Package.xml no encontrado, usando validación de directorios"
-                            bat "${SF_CMD} project deploy validate --source-dir force-app/main/default/classes --target-org %SFDX_ALIAS% --test-level RunSpecifiedTests --tests ${env.TEST_FLAGS}"
+                            bat "${SF_CMD} project deploy validate --source-dir force-app/main/default/classes --target-org %SFDX_ALIAS% --test-level RunSpecifiedTests ${env.TEST_FLAGS}"
                         }
                         
                         echo "Validación completada exitosamente"
@@ -140,16 +149,58 @@ pipeline {
             }
         }
     }
+    
     post {
         always {
             bat "if exist auth_url.txt del auth_url.txt"
         }
         success { 
-            echo "Validación completada con éxito." 
-            echo "Tests ejecutados: ${env.TEST_LIST}"
+            script {
+                echo "✅ Validación completada con éxito."
+                echo "Tests ejecutados: ${env.TEST_FLAGS}"
+                
+                // Actualizar status en GitHub como exitoso
+                updateGitHubStatus('success', '✅ Validación exitosa - PR listo para merge')
+                
+                // Comentario en el PR
+                addPRComment("""
+## ✅ Validación Exitosa
+                
+**Estado:** PR aprobado para merge
+**Tests ejecutados:** Todos los tests pasaron correctamente
+**Package.xml:** Generado exitosamente
+                
+🟢 **Acción requerida:** Este PR puede ser mergeado de forma segura.
+                
+---
+*Validación completada en: ${new Date()}*
+""")
+            }
         }
         failure { 
-            echo "Errores en la validación. Revisa el log de Jenkins." 
+            script {
+                echo "❌ Errores en la validación."
+                
+                // Actualizar status en GitHub como fallido
+                updateGitHubStatus('failure', '❌ Validación fallida - NO mergear')
+                
+                // Comentario en el PR
+                addPRComment("""
+## ❌ Validación Fallida
+                
+**Estado:** PR rechazado - NO MERGEAR
+**Error:** La validación ha fallado
+                
+🔴 **Acción requerida:** 
+1. Revisa los logs de Jenkins para más detalles
+2. Corrige los errores encontrados
+3. Haz push de los cambios para re-ejecutar la validación
+                
+---
+*Validación fallida en: ${new Date()}*
+**Log de Jenkins:** [Ver detalles](${BUILD_URL}console)
+""")
+            }
         }
     }
 }
@@ -176,4 +227,40 @@ def createBasicPackage() {
     echo "Package.xml básico creado"
 }
 
-// Fin del script
+// Función para actualizar el status en GitHub
+def updateGitHubStatus(String state, String description) {
+    try {
+        bat """
+        curl -X POST ^
+        -H "Authorization: token %GITHUB_TOKEN%" ^
+        -H "Accept: application/vnd.github.v3+json" ^
+        "https://api.github.com/repos/${env.REPO_OWNER}/${env.REPO_NAME}/statuses/${env.GIT_COMMIT}" ^
+        -d "{\\"state\\": \\"${state}\\", \\"description\\": \\"${description}\\", \\"context\\": \\"Jenkins/validation\\"}"
+        """
+    } catch (Exception e) {
+        echo "Error actualizando GitHub status: ${e.getMessage()}"
+    }
+}
+
+// Función para agregar comentario al PR
+def addPRComment(String comment) {
+    try {
+        // Obtener número del PR
+        def prNumber = env.CHANGE_ID
+        
+        bat """
+        curl -X POST ^
+        -H "Authorization: token %GITHUB_TOKEN%" ^
+        -H "Accept: application/vnd.github.v3+json" ^
+        "https://api.github.com/repos/${env.REPO_OWNER}/${env.REPO_NAME}/issues/${prNumber}/comments" ^
+        -d "{\\"body\\": \\"${comment.replace('"', '\\"').replace('\n', '\\n')}\\"}"
+        """
+    } catch (Exception e) {
+        echo "Error agregando comentario al PR: ${e.getMessage()}"
+    }
+}
+
+// manejo de errores para devs -- informar con mensaje al usuario
+// comando de error para que no permita mergear
+
+// NO deploy automatico, sólo deploy al hacer merge en el pull request del repo
