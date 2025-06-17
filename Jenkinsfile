@@ -67,6 +67,9 @@ pipeline {
         }
         
         stage('Authenticate') {
+            when {
+                changeRequest()
+            }
             steps {
                 bat 'echo %SFDX_AUTH_URL% > auth_url.txt'
                 bat "${SF_CMD} org login sfdx-url --sfdx-url-file auth_url.txt --alias %SFDX_ALIAS%"
@@ -74,6 +77,9 @@ pipeline {
         }
         
         stage('Crear package.xml') {
+            when {
+                changeRequest()
+            }
             steps {
                 script {
                     bat "if not exist package mkdir package"
@@ -114,6 +120,9 @@ pipeline {
         }
         
         stage('Definir tests') {
+            when {
+                changeRequest()
+            }
             steps {
                 script {
                     def yamlText = readFile 'test-config.yaml'
@@ -126,6 +135,9 @@ pipeline {
         }
         
         stage('Validar código') {
+            when {
+                changeRequest()
+            }
             steps {
                 script {
                     try {
