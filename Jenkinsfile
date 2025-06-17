@@ -259,7 +259,3 @@ def addPRComment(String comment) {
         echo "Error agregando comentario al PR: ${e.getMessage()}"
     }
 }
-
-// manejo de errores para devs -- informar con mensaje al usuario
-// comando de error para que no permita mergear
-// NO deploy automatico, sólo deploy al hacer merge en el pull request del repo
