@@ -12,18 +12,15 @@ pipeline {
         REPO_OWNER = 'Manug0'
         REPO_NAME = 'La-Rioja-dev'
     }
-    
-    // Solo ejecutar en PRs, no en pushes directos a main
-    when {
-        changeRequest()
-    }
-    
+
     stages {
-        stage('Checkout') { 
-            steps { 
+        stage('Checkout') {
+            when {
+                changeRequest()
+            }
+            steps {
                 checkout scm
                 script {
-                    // Establecer status como "pending" en GitHub
                     updateGitHubStatus('pending', 'Validación en progreso...')
                 }
             }
