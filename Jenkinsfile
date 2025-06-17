@@ -12,24 +12,19 @@ pipeline {
         REPO_OWNER = 'Manug0'
         REPO_NAME = 'La-Rioja-dev'
     }
-    
-    // Solo ejecutar en PRs, no en pushes directos a main
-    when {
-        changeRequest()
-    }
-    
+
     stages {
         stage('Checkout') { 
             steps { 
                 checkout scm
-                script {
-                    // Establecer status como "pending" en GitHub
-                    updateGitHubStatus('pending', 'Validación en progreso...')
-                }
+                updateGitHubStatus('pending', '🔄 Validación en curso - PR en revisión')
             }
         }
         
         stage('Obtener información Git') {
+            when {
+                changeRequest()
+            }
             steps {
                 script {
                     try {
@@ -63,12 +58,18 @@ pipeline {
         }
         
         stage('Verificar SFDX') { 
+            when {
+                changeRequest()
+            }
             steps { 
                 bat "${SF_CMD} --version" 
             }
         }
         
         stage('Authenticate') {
+            when {
+                changeRequest()
+            }
             steps {
                 bat 'echo %SFDX_AUTH_URL% > auth_url.txt'
                 bat "${SF_CMD} org login sfdx-url --sfdx-url-file auth_url.txt --alias %SFDX_ALIAS%"
@@ -76,6 +77,9 @@ pipeline {
         }
         
         stage('Crear package.xml') {
+            when {
+                changeRequest()
+            }
             steps {
                 script {
                     bat "if not exist package mkdir package"
@@ -116,6 +120,9 @@ pipeline {
         }
         
         stage('Definir tests') {
+            when {
+                changeRequest()
+            }
             steps {
                 script {
                     def yamlText = readFile 'test-config.yaml'
@@ -128,6 +135,9 @@ pipeline {
         }
         
         stage('Validar código') {
+            when {
+                changeRequest()
+            }
             steps {
                 script {
                     try {
@@ -259,8 +269,3 @@ def addPRComment(String comment) {
         echo "Error agregando comentario al PR: ${e.getMessage()}"
     }
 }
-
-// manejo de errores para devs -- informar con mensaje al usuario
-// comando de error para que no permita mergear
-
-// NO deploy automatico, sólo deploy al hacer merge en el pull request del repo
