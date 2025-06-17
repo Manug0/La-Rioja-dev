@@ -6,10 +6,6 @@ pipeline {
         PACKAGE_DIR = 'force-app'
         SF_DISABLE_TELEMETRY = "true"
         SF_CMD = 'C:\\Users\\Manu\\AppData\\Local\\sf\\client\\2.92.7-df40848\\bin\\sf.cmd'
-        
-        // Variables para notificaciones
-        SLACK_CHANNEL = credentials('SLACK_CHANNEL') // Opcional
-        EMAIL_LIST = credentials('EMAIL_LIST') // Lista de emails para notificar
     }
     
     // Solo ejecutar en main branch después de merge
@@ -25,7 +21,7 @@ pipeline {
                     
                     // Verificar que este commit viene de un merge de PR
                     def commitMessage = bat(script: "git log -1 --pretty=format:%%s", returnStdout: true).trim()
-                    echo "Commit message: ${commitMessage}"
+                    echo "📋 Commit message: ${commitMessage}"
                     
                     if (commitMessage.contains("Merge pull request")) {
                         echo "✅ Deploy autorizado - Commit proviene de merge de PR"
@@ -42,13 +38,25 @@ pipeline {
         stage('Confirmación Manual') {
             steps {
                 script {
+                    echo """
+╔══════════════════════════════════════════════════════════════╗
+║                 🚀 CONFIRMACIÓN DE DEPLOY                    ║
+╠══════════════════════════════════════════════════════════════╣
+║ Entorno: PRODUCCIÓN                                         ║
+║ Branch: ${env.BRANCH_NAME}                                  ║
+║ Commit: ${env.GIT_COMMIT?.take(8)}                          ║
+║                                                              ║
+║ ⚠️  ATENCIÓN: Vas a desplegar a PRODUCCIÓN                  ║
+╚══════════════════════════════════════════════════════════════╝
+"""
+                    
                     // Pausa para confirmación manual
                     def userInput
                     try {
                         timeout(time: 10, unit: 'MINUTES') {
                             userInput = input(
                                 id: 'DeployConfirmation',
-                                message: 'Confirmar deploy a PRODUCCIÓN',
+                                message: '🚀 Confirmar deploy a PRODUCCIÓN',
                                 parameters: [
                                     choice(
                                         name: 'DEPLOY_ACTION',
@@ -64,7 +72,7 @@ pipeline {
                     }
                     
                     env.DEPLOY_TYPE = userInput
-                    echo "Tipo de deploy seleccionado: ${env.DEPLOY_TYPE}"
+                    echo "✅ Tipo de deploy seleccionado: ${env.DEPLOY_TYPE}"
                     
                     if (env.DEPLOY_TYPE == 'CANCELAR') {
                         error("Deploy cancelado manualmente")
@@ -82,8 +90,11 @@ pipeline {
         
         stage('Verificar SFDX') { 
             steps { 
-                bat "${SF_CMD} --version"
-                echo "✅ SFDX CLI verificado"
+                script {
+                    echo "🔧 Verificando SFDX CLI..."
+                    bat "${SF_CMD} --version"
+                    echo "✅ SFDX CLI verificado"
+                }
             }
         }
         
@@ -115,7 +126,7 @@ pipeline {
                             def fromCommit = parentCommits[0]  // Commit de main antes del merge
                             def toCommit = parentCommits[1]    // Último commit de la rama mergeada
                             
-                            echo "Generando delta desde ${fromCommit} hasta ${toCommit}"
+                            echo "🔄 Generando delta desde ${fromCommit} hasta ${toCommit}"
                             
                             // Verificar plugin sfdx-git-delta
                             def pluginCheck = bat(script: "${SF_CMD} plugins | findstr sfdx-git-delta", returnStatus: true)
@@ -134,12 +145,13 @@ pipeline {
                         
                     } catch (Exception e) {
                         echo "⚠️ Error generando delta: ${e.getMessage()}"
-                        echo "Usando package completo como fallback"
+                        echo "🔄 Usando package completo como fallback"
                         createProductionPackage()
                     }
                     
                     // Verificar que el package.xml existe
                     if (fileExists('package\\package.xml')) {
+                        echo "📄 Contenido del package.xml:"
                         bat "type package\\package.xml"
                         echo "✅ Package.xml listo para deploy"
                     } else {
@@ -152,14 +164,18 @@ pipeline {
         stage('Deploy a Producción') {
             steps {
                 script {
-                    echo "🚀 Iniciando deploy a PRODUCCIÓN..."
+                    echo """
+╔══════════════════════════════════════════════════════════════╗
+║                🚀 INICIANDO DEPLOY A PRODUCCIÓN              ║
+╚══════════════════════════════════════════════════════════════╝
+"""
                     
                     try {
                         if (env.DEPLOY_TYPE == 'DEPLOY_CON_TESTS') {
-                            echo "Deploy con tests completos..."
+                            echo "🧪 Deploy con tests completos..."
                             bat "${SF_CMD} project deploy start --manifest package\\package.xml --target-org %SFDX_ALIAS% --wait 30 --test-level RunLocalTests"
                         } else {
-                            echo "Deploy normal (sin tests adicionales)..."
+                            echo "🚀 Deploy normal (sin tests adicionales)..."
                             bat "${SF_CMD} project deploy start --manifest package\\package.xml --target-org %SFDX_ALIAS% --wait 30"
                         }
                         
@@ -197,105 +213,83 @@ pipeline {
             script {
                 // Limpiar archivos temporales
                 bat "if exist auth_url.txt del auth_url.txt"
-                
-                // Log final
-                echo "🏁 Pipeline de deploy completado"
+                echo "🧹 Archivos temporales limpiados"
             }
         }
         success { 
             script {
-                echo "🎉 ¡DEPLOY A PRODUCCIÓN EXITOSO!"
-                
-                // Notificar éxito
-                def successMessage = """
-## 🎉 Deploy a Producción EXITOSO
-
-**Rama:** ${env.BRANCH_NAME}
-**Commit:** ${env.GIT_COMMIT}
-**Fecha:** ${new Date()}
-**Tipo de Deploy:** ${env.DEPLOY_TYPE}
-
-✅ **Estado:** Código desplegado exitosamente en producción
-🔗 **Jenkins:** [Ver log completo](${BUILD_URL}console)
-
-### Próximos pasos:
-- Verificar funcionalidad en producción
-- Monitorear logs de errores
-- Comunicar a usuarios finales si es necesario
+                echo """
+╔══════════════════════════════════════════════════════════════╗
+║               🎉 DEPLOY A PRODUCCIÓN EXITOSO                 ║
+╠══════════════════════════════════════════════════════════════╣
+║ Branch: ${env.BRANCH_NAME}                                   ║
+║ Commit: ${env.GIT_COMMIT?.take(8)}                           ║
+║ Fecha: ${new Date()}                                         ║
+║ Tipo de Deploy: ${env.DEPLOY_TYPE}                           ║
+║                                                              ║
+║ ✅ ESTADO: Código desplegado exitosamente en producción     ║
+║                                                              ║
+║ Próximos pasos:                                             ║
+║ • Verificar funcionalidad en producción                    ║
+║ • Monitorear logs de errores                               ║
+║ • Comunicar a usuarios finales si es necesario             ║
+║                                                              ║
+║ 🔗 Jenkins: ${BUILD_URL}console                             ║
+╚══════════════════════════════════════════════════════════════╝
 """
                 
-                // Enviar notificación por email
-                try {
-                    emailext (
-                        subject: "✅ Deploy a Producción EXITOSO - ${env.JOB_NAME}",
-                        body: successMessage,
-                        to: "${env.EMAIL_LIST}",
-                        mimeType: 'text/html'
-                    )
-                } catch (Exception e) {
-                    echo "Error enviando email: ${e.getMessage()}"
-                }
-                
-                echo successMessage
+                // Marcar el build como exitoso con descripción
+                currentBuild.description = "🎉 Deploy exitoso a producción"
+                currentBuild.result = 'SUCCESS'
             }
         }
         failure { 
             script {
-                echo "💥 DEPLOY A PRODUCCIÓN FALLÓ"
-                
-                // Notificar fallo
-                def failureMessage = """
-## 💥 Deploy a Producción FALLÓ
-
-**Rama:** ${env.BRANCH_NAME}
-**Commit:** ${env.GIT_COMMIT}
-**Fecha:** ${new Date()}
-**Tipo de Deploy:** ${env.DEPLOY_TYPE ?: 'No especificado'}
-
-❌ **Estado:** Deploy falló - Producción NO afectada
-🔗 **Jenkins:** [Ver log de errores](${BUILD_URL}console)
-
-### Acciones requeridas:
-1. Revisar logs de Jenkins para identificar el error
-2. Corregir problemas en código
-3. Crear nuevo PR con las correcciones
-4. Re-ejecutar validaciones
-5. Intentar deploy nuevamente
-
-### Contacto:
-- Equipo DevOps: [email/slack]
-- Documentación: [wiki/confluence]
+                echo """
+╔══════════════════════════════════════════════════════════════╗
+║                💥 DEPLOY A PRODUCCIÓN FALLÓ                  ║
+╠══════════════════════════════════════════════════════════════╣
+║ Branch: ${env.BRANCH_NAME}                                   ║
+║ Commit: ${env.GIT_COMMIT?.take(8)}                           ║
+║ Fecha: ${new Date()}                                         ║
+║ Tipo de Deploy: ${env.DEPLOY_TYPE ?: 'No especificado'}     ║
+║                                                              ║
+║ ❌ ESTADO: Deploy falló - Producción NO afectada            ║
+║                                                              ║
+║ Acciones requeridas:                                        ║
+║ 1. Revisar logs de Jenkins para identificar el error       ║
+║ 2. Corregir problemas en código                            ║
+║ 3. Crear nuevo PR con las correcciones                     ║
+║ 4. Re-ejecutar validaciones                                ║
+║ 5. Intentar deploy nuevamente                              ║
+║                                                              ║
+║ 🔗 Jenkins: ${BUILD_URL}console                             ║
+╚══════════════════════════════════════════════════════════════╝
 """
                 
-                // Enviar notificación por email
-                try {
-                    emailext (
-                        subject: "❌ Deploy a Producción FALLÓ - ${env.JOB_NAME}",
-                        body: failureMessage,
-                        to: "${env.EMAIL_LIST}",
-                        mimeType: 'text/html'
-                    )
-                } catch (Exception e) {
-                    echo "Error enviando email: ${e.getMessage()}"
-                }
-                
-                echo failureMessage
+                // Marcar el build como fallido con descripción
+                currentBuild.description = "💥 Deploy falló - Revisar logs"
+                currentBuild.result = 'FAILURE'
             }
         }
         aborted {
             script {
-                echo "⏹️ Deploy cancelado manualmente"
-                
-                def abortedMessage = """
-## ⏹️ Deploy a Producción CANCELADO
-
-**Motivo:** Cancelado manualmente o por timeout
-**Fecha:** ${new Date()}
-
-ℹ️ **Estado:** No se realizaron cambios en producción
+                echo """
+╔══════════════════════════════════════════════════════════════╗
+║              ⏹️ DEPLOY A PRODUCCIÓN CANCELADO                ║
+╠══════════════════════════════════════════════════════════════╣
+║ Motivo: Cancelado manualmente o por timeout                 ║
+║ Fecha: ${new Date()}                                         ║
+║                                                              ║
+║ ℹ️ ESTADO: No se realizaron cambios en producción          ║
+║                                                              ║
+║ Para reintentar:                                            ║
+║ • Ejecutar manualmente el pipeline de deploy               ║
+║ • O hacer un nuevo push a main (si es necesario)           ║
+╚══════════════════════════════════════════════════════════════╝
 """
                 
-                echo abortedMessage
+                currentBuild.description = "⏹️ Deploy cancelado manualmente"
             }
         }
     }
