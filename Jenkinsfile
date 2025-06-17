@@ -111,7 +111,9 @@ pipeline {
         stage('Definir tests') {
             steps {
                 script {
-                    def testList = ["HSU_SistemasUpdater_TEST", "HSU_UTSUpdater_TEST"]
+                    def yamlText = readFile 'test-config.yaml'
+                    def yaml = new org.yaml.snakeyaml.Yaml().load(yamlText)
+                    def testList = yaml.tests.core_tests
                     env.TEST_FLAGS = testList.collect { "--tests ${it}" }.join(' ')
                     echo "Tests a ejecutar: ${testList}"
                 }
@@ -176,4 +178,7 @@ def createBasicPackage() {
     echo "Package.xml básico creado"
 }
 
-// Fin del script
+// manejo de errores para devs -- informar con mensaje al usuario
+// comando de error para que no permita mergear
+
+// NO deploy automatico, sólo deploy al hacer merge en el pull request del repo
