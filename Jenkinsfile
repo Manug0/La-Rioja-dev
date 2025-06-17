@@ -22,6 +22,9 @@ pipeline {
         }
         
         stage('Obtener información Git') {
+            when {
+                changeRequest()
+            }
             steps {
                 script {
                     try {
@@ -55,6 +58,9 @@ pipeline {
         }
         
         stage('Verificar SFDX') { 
+            when {
+                changeRequest()
+            }
             steps { 
                 bat "${SF_CMD} --version" 
             }
