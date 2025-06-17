@@ -14,15 +14,10 @@ pipeline {
     }
 
     stages {
-        stage('Checkout') {
-            when {
-                changeRequest()
-            }
-            steps {
+        stage('Checkout') { 
+            steps { 
                 checkout scm
-                script {
-                    updateGitHubStatus('pending', 'Validación en progreso...')
-                }
+                updateGitHubStatus('pending', '🔄 Validación en curso - PR en revisión')
             }
         }
         
