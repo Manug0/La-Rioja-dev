@@ -263,3 +263,4 @@ def createBasicPackage() {
     writeFile file: 'package/package.xml', text: packageXml
     echo "✅ Package.xml básico creado"
 }
+// Asegurarse de que la función esté disponible
