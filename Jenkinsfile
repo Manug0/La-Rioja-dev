@@ -287,7 +287,7 @@ def updateGitHubStatus(state, description, context) {
             requestBody: jsonPayload,
             url: "https://api.github.com/repos/${repoOwner}/${repoName}/statuses/${commitSha}",
             customHeaders: [
-                [name: 'Authorization', value: "token ${GITHUB_TOKEN}"],
+                [name: 'Authorization', value: "token ${GITHUB_TOKEN_PSW}"],
                 [name: 'User-Agent', value: 'Jenkins-Pipeline']
             ]
         )
