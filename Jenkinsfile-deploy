@@ -10,11 +10,6 @@ pipeline {
         GITHUB_TOKEN = credentials('github-pat')
     }
     
-    // Solo ejecutar en main branch después de merge
-    when {
-        branch 'main'
-    }
-    
     stages {
         stage('Inicializar Deploy') {
             steps {
