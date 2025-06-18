@@ -47,59 +47,7 @@ pipeline {
                 }
             }
         }
-        
-        stage('Confirmación Manual') {
-            steps {
-                script {
-                    updateGitHubStatus('pending', 'Esperando confirmación manual...', 'production-deploy')
-                    
-                    echo """
-╔══════════════════════════════════════════════════════════════╗
-║                 🚀 CONFIRMACIÓN DE DEPLOY                    ║
-╠══════════════════════════════════════════════════════════════╣
-║ Entorno: PRODUCCIÓN                                         ║
-║ Branch: ${env.BRANCH_NAME}                                  ║
-║ Commit: ${env.GIT_COMMIT?.take(8)}                          ║
-║                                                              ║
-║ ⚠️  ATENCIÓN: Vas a desplegar a PRODUCCIÓN                  ║
-╚══════════════════════════════════════════════════════════════╝
-"""
-                    
-                    // Pausa para confirmación manual
-                    def userInput
-                    try {
-                        timeout(time: 10, unit: 'MINUTES') {
-                            userInput = input(
-                                id: 'DeployConfirmation',
-                                message: '🚀 Confirmar deploy a PRODUCCIÓN',
-                                parameters: [
-                                    choice(
-                                        name: 'DEPLOY_ACTION',
-                                        choices: ['CANCELAR', 'DEPLOY_NORMAL', 'DEPLOY_CON_TESTS'],
-                                        description: 'Selecciona el tipo de deploy'
-                                    )
-                                ]
-                            )
-                        }
-                    } catch (err) {
-                        echo "❌ Timeout o cancelación manual del deploy"
-                        updateGitHubStatus('error', 'Deploy cancelado - Timeout en confirmación manual', 'production-deploy')
-                        error("Deploy cancelado por timeout o intervención manual")
-                    }
-                    
-                    env.DEPLOY_TYPE = userInput
-                    echo "✅ Tipo de deploy seleccionado: ${env.DEPLOY_TYPE}"
-                    
-                    if (env.DEPLOY_TYPE == 'CANCELAR') {
-                        updateGitHubStatus('error', 'Deploy cancelado manualmente', 'production-deploy')
-                        error("Deploy cancelado manualmente")
-                    }
-                    
-                    updateGitHubStatus('pending', "Deploy confirmado - Tipo: ${env.DEPLOY_TYPE}", 'production-deploy')
-                }
-            }
-        }
-        
+                
         stage('Checkout') { 
             steps { 
                 checkout scm 
