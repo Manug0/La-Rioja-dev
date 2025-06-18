@@ -6,6 +6,8 @@ pipeline {
         PACKAGE_DIR = 'force-app'
         SF_DISABLE_TELEMETRY = "true"
         SF_CMD = 'C:\\Users\\Manu\\AppData\\Local\\sf\\client\\2.92.7-df40848\\bin\\sf.cmd'
+        // Agregar credenciales de GitHub
+        GITHUB_TOKEN = credentials('github-pat')
     }
     
     // Solo ejecutar en main branch después de merge
@@ -14,9 +16,24 @@ pipeline {
     }
     
     stages {
+        stage('Inicializar Deploy') {
+            steps {
+                script {
+                    // Notificar GitHub que el deploy ha comenzado
+                    updateGitHubStatus('pending', 'Iniciando deploy a producción...', 'production-deploy')
+                    
+                    echo "🚀 Iniciando pipeline de deploy a producción"
+                    echo "Branch: ${env.BRANCH_NAME}"
+                    echo "Commit: ${env.GIT_COMMIT?.take(8)}"
+                }
+            }
+        }
+        
         stage('Verificar Prerequisites') {
             steps {
                 script {
+                    updateGitHubStatus('pending', 'Verificando requisitos...', 'production-deploy')
+                    
                     echo "🔍 Verificando prerequisites para deploy..."
                     
                     // Verificar que este commit viene de un merge de PR
@@ -29,6 +46,7 @@ pipeline {
                     } else {
                         echo "❌ Deploy NO autorizado - Commit no proviene de merge de PR"
                         env.DEPLOY_AUTHORIZED = "false"
+                        updateGitHubStatus('failure', 'Deploy cancelado - No proviene de PR validado', 'production-deploy')
                         error("Deploy cancelado: Solo se permite deploy desde merge de PR validado")
                     }
                 }
@@ -38,6 +56,8 @@ pipeline {
         stage('Confirmación Manual') {
             steps {
                 script {
+                    updateGitHubStatus('pending', 'Esperando confirmación manual...', 'production-deploy')
+                    
                     echo """
 ╔══════════════════════════════════════════════════════════════╗
 ║                 🚀 CONFIRMACIÓN DE DEPLOY                    ║
@@ -68,6 +88,7 @@ pipeline {
                         }
                     } catch (err) {
                         echo "❌ Timeout o cancelación manual del deploy"
+                        updateGitHubStatus('error', 'Deploy cancelado - Timeout en confirmación manual', 'production-deploy')
                         error("Deploy cancelado por timeout o intervención manual")
                     }
                     
@@ -75,8 +96,11 @@ pipeline {
                     echo "✅ Tipo de deploy seleccionado: ${env.DEPLOY_TYPE}"
                     
                     if (env.DEPLOY_TYPE == 'CANCELAR') {
+                        updateGitHubStatus('error', 'Deploy cancelado manualmente', 'production-deploy')
                         error("Deploy cancelado manualmente")
                     }
+                    
+                    updateGitHubStatus('pending', "Deploy confirmado - Tipo: ${env.DEPLOY_TYPE}", 'production-deploy')
                 }
             }
         }
@@ -91,6 +115,8 @@ pipeline {
         stage('Verificar SFDX') { 
             steps { 
                 script {
+                    updateGitHubStatus('pending', 'Verificando herramientas...', 'production-deploy')
+                    
                     echo "🔧 Verificando SFDX CLI..."
                     bat "${SF_CMD} --version"
                     echo "✅ SFDX CLI verificado"
@@ -101,6 +127,8 @@ pipeline {
         stage('Authenticate') {
             steps {
                 script {
+                    updateGitHubStatus('pending', 'Autenticando con producción...', 'production-deploy')
+                    
                     echo "🔐 Autenticando con org de producción..."
                     bat 'echo %SFDX_AUTH_URL% > auth_url.txt'
                     bat "${SF_CMD} org login sfdx-url --sfdx-url-file auth_url.txt --alias %SFDX_ALIAS%"
@@ -112,6 +140,8 @@ pipeline {
         stage('Generar Package Deploy') {
             steps {
                 script {
+                    updateGitHubStatus('pending', 'Preparando package para deploy...', 'production-deploy')
+                    
                     echo "📦 Generando package para deploy..."
                     
                     // Crear directorio package si no existe
@@ -155,6 +185,7 @@ pipeline {
                         bat "type package\\package.xml"
                         echo "✅ Package.xml listo para deploy"
                     } else {
+                        updateGitHubStatus('failure', 'Error preparando package - Deploy cancelado', 'production-deploy')
                         error("❌ Error: package.xml no encontrado")
                     }
                 }
@@ -164,6 +195,8 @@ pipeline {
         stage('Deploy a Producción') {
             steps {
                 script {
+                    updateGitHubStatus('pending', 'Ejecutando deploy en producción...', 'production-deploy')
+                    
                     echo """
 ╔══════════════════════════════════════════════════════════════╗
 ║                🚀 INICIANDO DEPLOY A PRODUCCIÓN              ║
@@ -183,6 +216,7 @@ pipeline {
                         
                     } catch (Exception e) {
                         echo "❌ Error en deploy: ${e.getMessage()}"
+                        updateGitHubStatus('failure', 'Deploy falló en Salesforce', 'production-deploy')
                         throw e
                     }
                 }
@@ -192,6 +226,8 @@ pipeline {
         stage('Verificar Deploy') {
             steps {
                 script {
+                    updateGitHubStatus('pending', 'Verificando resultado del deploy...', 'production-deploy')
+                    
                     echo "🔍 Verificando estado del deploy..."
                     
                     try {
@@ -205,12 +241,14 @@ pipeline {
                         } else {
                             echo "❌ Deploy reportado como fallido"
                             env.DEPLOY_VERIFIED = "false"
+                            updateGitHubStatus('failure', 'Deploy falló en verificación final', 'production-deploy')
                             error("Deploy falló en la verificación final")
                         }
                         
                     } catch (Exception e) {
                         echo "❌ Error crítico verificando deploy: ${e.getMessage()}"
                         env.DEPLOY_VERIFIED = "false"
+                        updateGitHubStatus('failure', 'Error verificando deploy - Estado incierto', 'production-deploy')
                         error("No se pudo verificar el estado del deploy - Marcando como fallido por seguridad")
                     }
                 }
@@ -220,6 +258,8 @@ pipeline {
         stage('Smoke Tests Post-Deploy') {
             steps {
                 script {
+                    updateGitHubStatus('pending', 'Ejecutando tests post-deploy...', 'production-deploy')
+                    
                     echo "🧪 Ejecutando smoke tests post-deploy..."
                     
                     try {
@@ -233,6 +273,7 @@ pipeline {
                     } catch (Exception e) {
                         echo "❌ Smoke tests fallaron: ${e.getMessage()}"
                         env.SMOKE_TESTS_PASSED = "false"
+                        updateGitHubStatus('failure', 'Smoke tests fallaron - Deploy marcado como fallido', 'production-deploy')
                         error("Smoke tests post-deploy fallaron - Deploy marcado como fallido")
                     }
                 }
@@ -249,11 +290,13 @@ pipeline {
             }
         }
         success { 
-            steps {
-                script {
-                    // Solo marcar como exitoso si TODAS las verificaciones pasaron
-                    if (env.DEPLOY_VERIFIED == "true" && env.SMOKE_TESTS_PASSED == "true") {
-                        echo """
+            script {
+                // Solo marcar como exitoso si TODAS las verificaciones pasaron
+                if (env.DEPLOY_VERIFIED == "true" && env.SMOKE_TESTS_PASSED == "true") {
+                    // ✅ ÉXITO COMPLETO - Notificar a GitHub
+                    updateGitHubStatus('success', 'Deploy completado exitosamente en producción', 'production-deploy')
+                    
+                    echo """
 ╔══════════════════════════════════════════════════════════════╗
 ║               🎉 DEPLOY A PRODUCCIÓN EXITOSO                 ║
 ╠══════════════════════════════════════════════════════════════╣
@@ -265,32 +308,32 @@ pipeline {
 ║ ✅ ESTADO: Código desplegado exitosamente en producción     ║
 ║ ✅ VERIFICACIÓN: Deploy confirmado como exitoso             ║
 ║ ✅ SMOKE TESTS: Org funcionando correctamente               ║
+║ ✅ GITHUB: Status actualizado como SUCCESS                  ║
 ║                                                              ║
-║ Próximos pasos:                                             ║
-║ • Verificar funcionalidad en producción                    ║
-║ • Monitorear logs de errores                               ║
-║ • Comunicar a usuarios finales si es necesario             ║
-║                                                              ║
-║ 🔗 Jenkins: ${BUILD_URL}console                             ║
+║ 🌟 Main branch ahora marcada como exitosa en GitHub         ║
 ╚══════════════════════════════════════════════════════════════╝
 """
-                        
-                        // Marcar el build como exitoso con descripción
-                        currentBuild.description = "🎉 Deploy exitoso y verificado en producción"
-                        currentBuild.result = 'SUCCESS'
-                        
-                    } else {
-                        echo "❌ Deploy no puede marcarse como exitoso - Verificaciones fallaron"
-                        echo "Deploy Verified: ${env.DEPLOY_VERIFIED}"
-                        echo "Smoke Tests: ${env.SMOKE_TESTS_PASSED}"
-                        currentBuild.result = 'FAILURE'
-                        error("Deploy no puede considerarse exitoso debido a verificaciones fallidas")
-                    }
+                    
+                    // Marcar el build como exitoso con descripción
+                    currentBuild.description = "🎉 Deploy exitoso y verificado - GitHub actualizado"
+                    currentBuild.result = 'SUCCESS'
+                    
+                } else {
+                    echo "❌ Deploy no puede marcarse como exitoso - Verificaciones fallaron"
+                    echo "Deploy Verified: ${env.DEPLOY_VERIFIED}"
+                    echo "Smoke Tests: ${env.SMOKE_TESTS_PASSED}"
+                    
+                    updateGitHubStatus('failure', 'Deploy incompleto - Verificaciones fallaron', 'production-deploy')
+                    currentBuild.result = 'FAILURE'
+                    error("Deploy no puede considerarse exitoso debido a verificaciones fallidas")
                 }
             }
         }
         failure { 
             script {
+                // ❌ FALLO - Notificar a GitHub
+                updateGitHubStatus('failure', 'Deploy falló - Revisar logs de Jenkins', 'production-deploy')
+                
                 echo """
 ╔══════════════════════════════════════════════════════════════╗
 ║                💥 DEPLOY A PRODUCCIÓN FALLÓ                  ║
@@ -298,67 +341,42 @@ pipeline {
 ║ Branch: ${env.BRANCH_NAME}                                   ║
 ║ Commit: ${env.GIT_COMMIT?.take(8)}                           ║
 ║ Fecha: ${new Date()}                                         ║
-║ Tipo de Deploy: ${env.DEPLOY_TYPE ?: 'No especificado'}     ║
+║ Tipo de Deploy: ${env.DEPLOY_TYPE ?: 'No especificado'}      ║
 ║                                                              ║
-║ ❌ ESTADO: Deploy falló - Producción NO afectada            ║
+║ ❌ ESTADO: Deploy falló - Producción NO afectada             ║
+║ ❌ GITHUB: Status marcado como FAILED                        ║
 ║                                                              ║
-║ Acciones requeridas:                                        ║
-║ 1. Revisar logs de Jenkins para identificar el error       ║
-║ 2. Corregir problemas en código                            ║
-║ 3. Crear nuevo PR con las correcciones                     ║
-║ 4. Re-ejecutar validaciones                                ║
-║ 5. Intentar deploy nuevamente                              ║
+║ 🔴 Main branch marcada como fallida hasta resolución         ║
 ║                                                              ║
-║ 🔗 Jenkins: ${BUILD_URL}console                             ║
+║ Ver detalles en Jenkins para más información                 ║
 ╚══════════════════════════════════════════════════════════════╝
 """
-                
-                // Marcar el build como fallido con descripción
-                currentBuild.description = "💥 Deploy falló - Revisar logs"
-                currentBuild.result = 'FAILURE'
             }
         }
-        aborted {
+        cleanup {
             script {
-                echo """
-╔══════════════════════════════════════════════════════════════╗
-║              ⏹️ DEPLOY A PRODUCCIÓN CANCELADO                ║
-╠══════════════════════════════════════════════════════════════╣
-║ Motivo: Cancelado manualmente o por timeout                 ║
-║ Fecha: ${new Date()}                                         ║
-║                                                              ║
-║ ℹ️ ESTADO: No se realizaron cambios en producción          ║
-║                                                              ║
-║ Para reintentar:                                            ║
-║ • Ejecutar manualmente el pipeline de deploy               ║
-║ • O hacer un nuevo push a main (si es necesario)           ║
-╚══════════════════════════════════════════════════════════════╝
-"""
-                
-                currentBuild.description = "⏹️ Deploy cancelado manualmente"
+                // Limpieza adicional si es necesario
+                echo "🧹 Limpieza finalizada"
             }
         }
     }
 }
 
-// Función para crear package.xml de producción
+// Función para crear package.xml completo para producción
 def createProductionPackage() {
     def packageXml = '''<?xml version="1.0" encoding="UTF-8"?>
 <Package xmlns="http://soap.sforce.com/2006/04/metadata">
     <types>
-        <members>HSU_SistemasUpdater</members>
-        <members>HSU_UTSUpdater</members>
-        <members>HSU_SistemasUpdater_TEST</members>
-        <members>HSU_UTSUpdater_TEST</members>
-        <n>ApexClass</n>
+        <members>*</members>
+        <name>ApexClass</name>
     </types>
     <types>
-        <members>HSU_GlobalLists__c</members>
-        <n>CustomObject</n>
+        <members>*</members>
+        <name>CustomObject</name>
     </types>
     <version>59.0</version>
-</Package>'''
-    
+</Package>
+'''
     writeFile file: 'package/package.xml', text: packageXml
-    echo "✅ Package.xml de producción creado"
+    echo "✅ package.xml completo generado para producción"
 }

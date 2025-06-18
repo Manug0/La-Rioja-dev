@@ -6,6 +6,7 @@ pipeline {
         PACKAGE_DIR = 'force-app'
         SF_DISABLE_TELEMETRY = "true"
         SF_CMD = 'C:\\Users\\Manu\\AppData\\Local\\sf\\client\\2.92.7-df40848\\bin\\sf.cmd'
+        GITHUB_TOKEN = credentials('github-pat')
     }
     
     stages {
@@ -13,6 +14,8 @@ pipeline {
             steps { 
                 checkout scm
                 script {
+                    updateGitHubStatus('pending', 'Iniciando validación de PR...', 'pr-validation')
+                    
                     echo "🔄 Iniciando validación de PR..."
                     echo "PR: ${env.CHANGE_TITLE}"
                     echo "Autor: ${env.CHANGE_AUTHOR}"
@@ -24,6 +27,8 @@ pipeline {
         stage('Obtener información Git') {
             steps {
                 script {
+                    updateGitHubStatus('pending', 'Analizando cambios...', 'pr-validation')
+                    
                     try {
                         def gitLog = bat(script: "git log --oneline -n 2", returnStdout: true).trim()
                         echo "📋 Últimos 2 commits:"
@@ -57,6 +62,8 @@ pipeline {
         stage('Verificar SFDX') { 
             steps { 
                 script {
+                    updateGitHubStatus('pending', 'Verificando herramientas...', 'pr-validation')
+                    
                     echo "🔧 Verificando SFDX CLI..."
                     bat "${SF_CMD} --version"
                     echo "✅ SFDX CLI verificado"
@@ -67,6 +74,8 @@ pipeline {
         stage('Authenticate') {
             steps {
                 script {
+                    updateGitHubStatus('pending', 'Autenticando con Salesforce...', 'pr-validation')
+                    
                     echo "🔐 Autenticando con Salesforce..."
                     bat 'echo %SFDX_AUTH_URL% > auth_url.txt'
                     bat "${SF_CMD} org login sfdx-url --sfdx-url-file auth_url.txt --alias %SFDX_ALIAS%"
@@ -78,6 +87,8 @@ pipeline {
         stage('Crear package.xml') {
             steps {
                 script {
+                    updateGitHubStatus('pending', 'Preparando package de validación...', 'pr-validation')
+                    
                     echo "📦 Creando package.xml..."
                     bat "if not exist package mkdir package"
                     
@@ -139,6 +150,8 @@ pipeline {
         stage('Validar código') {
             steps {
                 script {
+                    updateGitHubStatus('pending', 'Ejecutando validación y tests...', 'pr-validation')
+                    
                     echo "🔍 Iniciando validación de código..."
                     try {
                         if (fileExists('package\\package.xml')) {
@@ -169,6 +182,9 @@ pipeline {
         }
         success { 
             script {
+                // Notificar éxito a GitHub
+                updateGitHubStatus('success', 'PR validado exitosamente - Listo para merge', 'pr-validation')
+                
                 echo """
 ╔══════════════════════════════════════════════════════════════╗
 ║                    ✅ VALIDACIÓN EXITOSA                     ║
@@ -178,22 +194,20 @@ pipeline {
 ║ Branch: ${env.CHANGE_BRANCH} -> ${env.CHANGE_TARGET}         
 ║ Tests ejecutados: ${env.TEST_FLAGS}                          
 ║                                                              ║
-║ 🟢 ESTADO: PR APROBADO PARA MERGE                           ║
-║                                                              ║
-║ Próximos pasos:                                             ║
-║ 1. Revisar y aprobar el PR en GitHub                       ║
-║ 2. Hacer merge a main                                      ║
-║ 3. El pipeline de deploy se ejecutará automáticamente      ║
+║ 🟢 GitHub Status: APROBADO                                  ║
+║ 🟢 Estado: PR listo para merge                              ║
 ╚══════════════════════════════════════════════════════════════╝
 """
                 
-                // Marcar el build como exitoso con descripción
-                currentBuild.description = "✅ Validación exitosa - PR listo para merge"
+                currentBuild.description = "✅ Validación exitosa - PR aprobado en GitHub"
                 currentBuild.result = 'SUCCESS'
             }
         }
         failure { 
             script {
+                // Notificar fallo a GitHub
+                updateGitHubStatus('failure', 'Validación falló - Revisar errores antes de merge', 'pr-validation')
+                
                 echo """
 ╔══════════════════════════════════════════════════════════════╗
 ║                     ❌ VALIDACIÓN FALLIDA                    ║
@@ -202,35 +216,23 @@ pipeline {
 ║ Autor: ${env.CHANGE_AUTHOR}                                  
 ║ Branch: ${env.CHANGE_BRANCH} -> ${env.CHANGE_TARGET}         
 ║                                                              ║
-║ 🔴 ESTADO: PR RECHAZADO - NO MERGEAR                        ║
+║ 🔴 GitHub Status: RECHAZADO                                 ║
+║ 🔴 Estado: PR bloqueado para merge                           ║
 ║                                                              ║
-║ Acciones requeridas:                                        ║
-║ 1. Revisar los logs de Jenkins para detalles del error     ║
-║ 2. Corregir los errores encontrados                        ║
-║ 3. Hacer push de los cambios a la rama del PR              ║
-║ 4. La validación se re-ejecutará automáticamente           ║
-║                                                              ║
-║ 🔗 Log completo: ${BUILD_URL}console                        ║
+║ Ver detalles en: ${BUILD_URL}console                        ║
 ╚══════════════════════════════════════════════════════════════╝
 """
                 
-                // Marcar el build como fallido con descripción
-                currentBuild.description = "❌ Validación fallida - Revisar errores"
+                currentBuild.description = "❌ Validación fallida - PR bloqueado en GitHub"
                 currentBuild.result = 'FAILURE'
             }
         }
         aborted {
             script {
-                echo """
-╔══════════════════════════════════════════════════════════════╗
-║                   ⏹️ VALIDACIÓN CANCELADA                    ║
-╠══════════════════════════════════════════════════════════════╣
-║ PR: ${env.CHANGE_TITLE}                                      
-║ Motivo: Cancelado manualmente o por timeout                 ║
-║                                                              ║
-║ 🔄 Para re-ejecutar: Hacer un nuevo push al PR             ║
-╚══════════════════════════════════════════════════════════════╝
-"""
+                // Notificar cancelación a GitHub
+                updateGitHubStatus('error', 'Validación cancelada - Re-ejecutar pipeline', 'pr-validation')
+                
+                echo "⏹️ Validación cancelada - Status enviado a GitHub"
                 currentBuild.description = "⏹️ Validación cancelada"
             }
         }
@@ -258,4 +260,42 @@ def createBasicPackage() {
     writeFile file: 'package/package.xml', text: packageXml
     echo "✅ Package.xml básico creado"
 }
-// Asegurarse de que la función esté disponible
+
+// Función para actualizar status en GitHub
+def updateGitHubStatus(state, description, context) {
+    try {
+        def repoUrl = scm.getUserRemoteConfigs()[0].getUrl()
+        def repoName = repoUrl.tokenize('/').last().replace('.git', '')
+        def repoOwner = repoUrl.tokenize('/')[-2]
+        
+        def commitSha = env.GIT_COMMIT
+        def targetUrl = "${BUILD_URL}console"
+        
+        def payload = [
+            state: state,
+            target_url: targetUrl,
+            description: description,
+            context: "jenkins/${context}"
+        ]
+        
+        def jsonPayload = groovy.json.JsonOutput.toJson(payload)
+        
+        def response = httpRequest(
+            acceptType: 'APPLICATION_JSON',
+            contentType: 'APPLICATION_JSON',
+            httpMode: 'POST',
+            requestBody: jsonPayload,
+            url: "https://api.github.com/repos/${repoOwner}/${repoName}/statuses/${commitSha}",
+            customHeaders: [
+                [name: 'Authorization', value: "token ${GITHUB_TOKEN}"],
+                [name: 'User-Agent', value: 'Jenkins-Pipeline']
+            ]
+        )
+        
+        echo "✅ GitHub status actualizado: ${state} - ${description}"
+        
+    } catch (Exception e) {
+        echo "⚠️ Error actualizando GitHub status: ${e.getMessage()}"
+        // No fallar el pipeline si no se puede actualizar GitHub
+    }
+}
