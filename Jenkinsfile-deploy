@@ -7,7 +7,7 @@ pipeline {
         SF_DISABLE_TELEMETRY = "true"
         SF_CMD = 'C:\\Users\\Manu\\AppData\\Local\\sf\\client\\2.92.7-df40848\\bin\\sf.cmd'
         // Agregar credenciales de GitHub
-        GITHUB_TOKEN = credentials('GITHUB_TOKEN')
+        GITHUB_TOKEN = credentials('github-pat')
     }
     
     // Solo ejecutar en main branch después de merge
