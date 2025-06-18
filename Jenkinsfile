@@ -8,11 +8,6 @@ pipeline {
         SF_CMD = 'C:\\Users\\Manu\\AppData\\Local\\sf\\client\\2.92.7-df40848\\bin\\sf.cmd'
     }
     
-    // Solo ejecutar en PRs, no en pushes directos a main
-    when {
-        changeRequest()
-    }
-    
     stages {
         stage('Checkout') { 
             steps { 
