@@ -6,7 +6,6 @@ pipeline {
         PACKAGE_DIR = 'force-app'
         SF_DISABLE_TELEMETRY = "true"
         SF_CMD = 'C:\\Users\\Manu\\AppData\\Local\\sf\\client\\2.92.7-df40848\\bin\\sf.cmd'
-        // Agregar credenciales de GitHub
         GITHUB_TOKEN = credentials('github-pat')
     }
     
@@ -15,7 +14,6 @@ pipeline {
             steps { 
                 checkout scm
                 script {
-                    // Notificar GitHub que la validación ha comenzado
                     updateGitHubStatus('pending', 'Iniciando validación de PR...', 'pr-validation')
                     
                     echo "🔄 Iniciando validación de PR..."
