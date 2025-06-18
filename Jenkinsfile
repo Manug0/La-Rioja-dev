@@ -9,9 +9,9 @@ pipeline {
     }
     
     // Solo ejecutar en PRs, no en pushes directos a main
-    // when {
-    //     changeRequest()
-    // }
+    when {
+        changeRequest()
+    }
     
     stages {
         stage('Checkout') { 
