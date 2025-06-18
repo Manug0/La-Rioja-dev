@@ -195,13 +195,45 @@ pipeline {
                     echo "🔍 Verificando estado del deploy..."
                     
                     try {
-                        // Verificar el último deploy
-                        bat "${SF_CMD} project deploy report --target-org %SFDX_ALIAS%"
-                        echo "✅ Verificación completada"
+                        // Verificar el último deploy y obtener resultado
+                        def deployResult = bat(script: "${SF_CMD} project deploy report --target-org %SFDX_ALIAS% --json", returnStdout: true).trim()
+                        def deployJson = readJSON text: deployResult
+                        
+                        if (deployJson.result.success == true) {
+                            echo "✅ Deploy verificado como exitoso"
+                            env.DEPLOY_VERIFIED = "true"
+                        } else {
+                            echo "❌ Deploy reportado como fallido"
+                            env.DEPLOY_VERIFIED = "false"
+                            error("Deploy falló en la verificación final")
+                        }
                         
                     } catch (Exception e) {
-                        echo "⚠️ Error verificando deploy: ${e.getMessage()}"
-                        // No fallar el pipeline por esto
+                        echo "❌ Error crítico verificando deploy: ${e.getMessage()}"
+                        env.DEPLOY_VERIFIED = "false"
+                        error("No se pudo verificar el estado del deploy - Marcando como fallido por seguridad")
+                    }
+                }
+            }
+        }
+        
+        stage('Smoke Tests Post-Deploy') {
+            steps {
+                script {
+                    echo "🧪 Ejecutando smoke tests post-deploy..."
+                    
+                    try {
+                        // Ejecutar un test básico para confirmar que el org funciona
+                        bat "${SF_CMD} data query --query \"SELECT Id, Name FROM User LIMIT 1\" --target-org %SFDX_ALIAS%"
+                        
+                        // Si tienes tests específicos post-deploy, añádelos aquí
+                        echo "✅ Smoke tests pasaron - Org responde correctamente"
+                        env.SMOKE_TESTS_PASSED = "true"
+                        
+                    } catch (Exception e) {
+                        echo "❌ Smoke tests fallaron: ${e.getMessage()}"
+                        env.SMOKE_TESTS_PASSED = "false"
+                        error("Smoke tests post-deploy fallaron - Deploy marcado como fallido")
                     }
                 }
             }
@@ -217,8 +249,11 @@ pipeline {
             }
         }
         success { 
-            script {
-                echo """
+            steps {
+                script {
+                    // Solo marcar como exitoso si TODAS las verificaciones pasaron
+                    if (env.DEPLOY_VERIFIED == "true" && env.SMOKE_TESTS_PASSED == "true") {
+                        echo """
 ╔══════════════════════════════════════════════════════════════╗
 ║               🎉 DEPLOY A PRODUCCIÓN EXITOSO                 ║
 ╠══════════════════════════════════════════════════════════════╣
@@ -228,6 +263,8 @@ pipeline {
 ║ Tipo de Deploy: ${env.DEPLOY_TYPE}                           ║
 ║                                                              ║
 ║ ✅ ESTADO: Código desplegado exitosamente en producción     ║
+║ ✅ VERIFICACIÓN: Deploy confirmado como exitoso             ║
+║ ✅ SMOKE TESTS: Org funcionando correctamente               ║
 ║                                                              ║
 ║ Próximos pasos:                                             ║
 ║ • Verificar funcionalidad en producción                    ║
@@ -237,10 +274,19 @@ pipeline {
 ║ 🔗 Jenkins: ${BUILD_URL}console                             ║
 ╚══════════════════════════════════════════════════════════════╝
 """
-                
-                // Marcar el build como exitoso con descripción
-                currentBuild.description = "🎉 Deploy exitoso a producción"
-                currentBuild.result = 'SUCCESS'
+                        
+                        // Marcar el build como exitoso con descripción
+                        currentBuild.description = "🎉 Deploy exitoso y verificado en producción"
+                        currentBuild.result = 'SUCCESS'
+                        
+                    } else {
+                        echo "❌ Deploy no puede marcarse como exitoso - Verificaciones fallaron"
+                        echo "Deploy Verified: ${env.DEPLOY_VERIFIED}"
+                        echo "Smoke Tests: ${env.SMOKE_TESTS_PASSED}"
+                        currentBuild.result = 'FAILURE'
+                        error("Deploy no puede considerarse exitoso debido a verificaciones fallidas")
+                    }
+                }
             }
         }
         failure { 
