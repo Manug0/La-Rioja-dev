@@ -261,7 +261,6 @@ def createBasicPackage() {
     echo "✅ Package.xml básico creado"
 }
 
-// Función para actualizar status en GitHub
 def updateGitHubStatus(state, description, context) {
     try {
         def repoUrl = scm.getUserRemoteConfigs()[0].getUrl()
