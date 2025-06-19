@@ -109,23 +109,20 @@ pipeline {
                                 echo "✅ Package.xml generado con delta"
                             } else {
                                 echo "⚠️ Plugin sfdx-git-delta no encontrado, usando package completo"
-                                createProductionPackage()
                             }
                         } else {
                             echo "⚠️ No se pudo determinar el delta, usando package completo"
-                            createProductionPackage()
                         }
                         
                     } catch (Exception e) {
                         echo "⚠️ Error generando delta: ${e.getMessage()}"
                         echo "🔄 Usando package completo como fallback"
-                        createProductionPackage()
                     }
                     
                     // Verificar que el package.xml existe
-                    if (fileExists('package\\package.xml')) {
+                    if (fileExists('manifest\\package.xml')) {
                         echo "📄 Contenido del package.xml:"
-                        bat "type package\\package.xml"
+                        bat "type manifest\\package.xml"
                         echo "✅ Package.xml listo para deploy"
                     } else {
                         updateGitHubStatus('failure', 'Error preparando package - Deploy cancelado', 'production-deploy')
@@ -149,10 +146,10 @@ pipeline {
                     try {
                         if (env.DEPLOY_TYPE == 'DEPLOY_CON_TESTS') {
                             echo "🧪 Deploy con tests completos..."
-                            bat "${SF_CMD} project deploy start --manifest package\\package.xml --target-org %SFDX_ALIAS% --wait 30 --test-level RunLocalTests"
+                            bat "${SF_CMD} project deploy start --manifest manifest\\package.xml --target-org %SFDX_ALIAS% --wait 30 --test-level RunLocalTests"
                         } else {
                             echo "🚀 Deploy normal (sin tests adicionales)..."
-                            bat "${SF_CMD} project deploy start --manifest package\\package.xml --target-org %SFDX_ALIAS% --wait 30"
+                            bat "${SF_CMD} project deploy start --manifest manifest\\package.xml --target-org %SFDX_ALIAS% --wait 30"
                         }
                         
                         echo "✅ Deploy completado exitosamente"
@@ -303,26 +300,6 @@ pipeline {
             }
         }
     }
-}
-
-// Función para crear package.xml completo para producción
-// REVISAR PARA ELIMINAR
-def createProductionPackage() {
-    def packageXml = '''<?xml version="1.0" encoding="UTF-8"?>
-<Package xmlns="http://soap.sforce.com/2006/04/metadata">
-    <types>
-        <members>*</members>
-        <name>ApexClass</name>
-    </types>
-    <types>
-        <members>*</members>
-        <name>CustomObject</name>
-    </types>
-    <version>59.0</version>
-</Package>
-'''
-    writeFile file: 'package/package.xml', text: packageXml
-    echo "✅ package.xml completo generado para producción"
 }
 
 def updateGitHubStatus(state, description, context) {
