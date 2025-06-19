@@ -245,14 +245,8 @@ def createBasicPackage() {
 <Package xmlns="http://soap.sforce.com/2006/04/metadata">
     <types>
         <members>HSU_SistemasUpdater</members>
-        <members>HSU_UTSUpdater</members>
         <members>HSU_SistemasUpdater_TEST</members>
-        <members>HSU_UTSUpdater_TEST</members>
         <name>ApexClass</name>
-    </types>
-    <types>
-        <members>HSU_GlobalLists__c</members>
-        <name>CustomObject</name>
     </types>
     <version>59.0</version>
 </Package>'''
