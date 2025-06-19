@@ -100,8 +100,19 @@ pipeline {
                             
                             if (pluginCheck == 0) {
                                 echo "✅ Plugin sfdx-git-delta encontrado, generando delta..."
-                                bat "\"${SF_CMD}\" sgd source delta --from \"${env.PREVIOUS_COMMIT}\" --to \"${env.CURRENT_COMMIT}\" --output ."
-                                echo "✅ Package.xml generado con delta exitosamente"
+                                bat "\"${SF_CMD}\" sgd source delta --from \"${env.PREVIOUS_COMMIT}\" --to \"${env.CURRENT_COMMIT}\" --output . --generate-delta"
+                                
+                                // Copiar el package.xml generado como deploy.xml
+                                if (fileExists('package\\package.xml')) {
+                                    bat "copy package\\package.xml deploy.xml"
+                                    echo "✅ deploy.xml generado con delta exitosamente"
+                                    
+                                    // Analizar clases en el package y añadir sus tests
+                                    addTestsToPackage('deploy.xml')
+                                } else {
+                                    echo "⚠️ No se generó package.xml, usando package básico"
+                                    createBasicPackage()
+                                }
                             } else {
                                 echo "⚠️ Plugin sfdx-git-delta no encontrado, usando package básico"
                                 createBasicPackage()
@@ -118,11 +129,12 @@ pipeline {
                         createBasicPackage()
                     }
                     
-                    bat "if exist package\\package.xml (echo ✅ Package.xml creado exitosamente) else (echo ❌ ERROR: package.xml no encontrado)"
+                    // Verificar que deploy.xml existe
+                    bat "if exist deploy.xml (echo ✅ deploy.xml creado exitosamente) else (echo ❌ ERROR: deploy.xml no encontrado)"
                     
-                    if (fileExists('package\\package.xml')) {
-                        echo "📄 Contenido del package.xml:"
-                        bat "type package\\package.xml"
+                    if (fileExists('deploy.xml')) {
+                        echo "📄 Contenido del deploy.xml:"
+                        bat "type deploy.xml"
                     }
                 }
             }
@@ -131,16 +143,14 @@ pipeline {
         stage('Definir tests') {
             steps {
                 script {
-                    echo "🧪 Configurando tests..."
-                    try {
-                        def yamlText = readFile 'test-config.yaml'
-                        def yaml = new org.yaml.snakeyaml.Yaml().load(yamlText)
-                        def testList = yaml.tests.core_tests
-                        env.TEST_FLAGS = testList.collect { "--tests ${it}" }.join(' ')
-                        echo "✅ Tests configurados: ${testList}"
-                    } catch (Exception e) {
-                        echo "⚠️ Error leyendo test-config.yaml: ${e.getMessage()}"
-                        echo "🔄 Usando configuración de tests por defecto"
+                    echo "🧪 Configurando tests basados en el package..."
+                    
+                    if (fileExists('deploy.xml')) {
+                        // Extraer tests del deploy.xml
+                        env.TEST_FLAGS = extractTestsFromPackage('deploy.xml')
+                        echo "✅ Tests configurados desde deploy.xml: ${env.TEST_FLAGS}"
+                    } else {
+                        echo "⚠️ deploy.xml no encontrado, usando configuración por defecto"
                         env.TEST_FLAGS = "--tests HSU_SistemasUpdater_TEST --tests HSU_UTSUpdater_TEST"
                     }
                 }
@@ -154,11 +164,11 @@ pipeline {
                     
                     echo "🔍 Iniciando validación de código..."
                     try {
-                        if (fileExists('package\\package.xml')) {
-                            echo "📦 Validando con package.xml y tests específicos: ${env.TEST_FLAGS}"
-                            bat "${SF_CMD} project deploy validate --manifest package\\package.xml --test-level RunSpecifiedTests ${env.TEST_FLAGS} --target-org %SFDX_ALIAS%"
+                        if (fileExists('deploy.xml')) {
+                            echo "📦 Validando con deploy.xml y tests específicos: ${env.TEST_FLAGS}"
+                            bat "${SF_CMD} project deploy validate --manifest deploy.xml --test-level RunSpecifiedTests ${env.TEST_FLAGS} --target-org %SFDX_ALIAS%"
                         } else {
-                            echo "📁 Package.xml no encontrado, usando validación de directorios"
+                            echo "📁 deploy.xml no encontrado, usando validación de directorios"
                             bat "${SF_CMD} project deploy validate --source-dir force-app/main/default/classes --target-org %SFDX_ALIAS% --test-level RunSpecifiedTests ${env.TEST_FLAGS}"
                         }
                         
@@ -239,26 +249,20 @@ pipeline {
     }
 }
 
-// Función para crear package.xml básico
+// Función para crear deploy.xml básico
 def createBasicPackage() {
     def packageXml = '''<?xml version="1.0" encoding="UTF-8"?>
 <Package xmlns="http://soap.sforce.com/2006/04/metadata">
     <types>
         <members>HSU_SistemasUpdater</members>
-        <members>HSU_UTSUpdater</members>
         <members>HSU_SistemasUpdater_TEST</members>
-        <members>HSU_UTSUpdater_TEST</members>
         <name>ApexClass</name>
-    </types>
-    <types>
-        <members>HSU_GlobalLists__c</members>
-        <name>CustomObject</name>
     </types>
     <version>59.0</version>
 </Package>'''
     
-    writeFile file: 'package/package.xml', text: packageXml
-    echo "✅ Package.xml básico creado"
+    writeFile file: 'deploy.xml', text: packageXml
+    echo "✅ deploy.xml básico creado"
 }
 
 def updateGitHubStatus(state, description, context) {
@@ -296,5 +300,125 @@ def updateGitHubStatus(state, description, context) {
     } catch (Exception e) {
         echo "⚠️ Error actualizando GitHub status: ${e.getMessage()}"
         // No fallar el pipeline si no se puede actualizar GitHub
+    }
+}
+
+// Función para añadir tests automáticamente al package basándose en las clases incluidas
+def addTestsToPackage(packageFile) {
+    try {
+        echo "🔍 Analizando clases en el package para añadir tests..."
+        
+        def packageContent = readFile(packageFile)
+        def apexClasses = []
+        
+        // Extraer nombres de clases Apex del XML
+        def lines = packageContent.split('\n')
+        boolean inApexSection = false
+        
+        for (line in lines) {
+            if (line.contains('<name>ApexClass</name>')) {
+                inApexSection = true
+                continue
+            }
+            if (inApexSection && line.contains('</types>')) {
+                break
+            }
+            if (inApexSection && line.contains('<members>') && !line.contains('*')) {
+                def className = line.replaceAll(/.*<members>([^<]+)<\/members>.*/, '$1').trim()
+                if (!className.endsWith('_TEST')) {
+                    apexClasses.add(className)
+                }
+            }
+        }
+        
+        echo "📋 Clases encontradas: ${apexClasses}"
+        
+        // Buscar tests correspondientes y añadirlos
+        def testsToAdd = []
+        for (className in apexClasses) {
+            def testClassName = className + '_TEST'
+            if (fileExists("force-app/main/default/classes/${testClassName}.cls")) {
+                testsToAdd.add(testClassName)
+                echo "✅ Test encontrado: ${testClassName}"
+            } else {
+                echo "⚠️ No se encontró test para: ${className}"
+            }
+        }
+        
+        if (testsToAdd.size() > 0) {
+            // Añadir tests al package XML
+            def updatedPackage = addTestsToXml(packageContent, testsToAdd)
+            writeFile file: packageFile, text: updatedPackage
+            echo "✅ Tests añadidos al package: ${testsToAdd}"
+        }
+        
+    } catch (Exception e) {
+        echo "⚠️ Error añadiendo tests al package: ${e.getMessage()}"
+    }
+}
+
+// Función para añadir tests al XML
+def addTestsToXml(xmlContent, testsToAdd) {
+    def lines = xmlContent.split('\n').toList()
+    def newLines = []
+    boolean inApexSection = false
+    boolean testsAdded = false
+    
+    for (line in lines) {
+        newLines.add(line)
+        
+        if (line.contains('<name>ApexClass</name>')) {
+            inApexSection = true
+        }
+        
+        if (inApexSection && line.contains('</types>') && !testsAdded) {
+            // Añadir tests antes de cerrar la sección ApexClass
+            def indentSpaces = line.replaceAll(/^(\s*).*/, '$1') // Mantener indentación
+            for (testClass in testsToAdd) {
+                newLines.add(newLines.size() - 1, "${indentSpaces}    <members>${testClass}</members>")
+            }
+            testsAdded = true
+            inApexSection = false
+        }
+    }
+    
+    return newLines.join('\n')
+}
+
+// Función para extraer tests del package y generar flags para el comando
+def extractTestsFromPackage(packageFile) {
+    try {
+        def packageContent = readFile(packageFile)
+        def testClasses = []
+        
+        def lines = packageContent.split('\n')
+        boolean inApexSection = false
+        
+        for (line in lines) {
+            if (line.contains('<name>ApexClass</name>')) {
+                inApexSection = true
+                continue
+            }
+            if (inApexSection && line.contains('</types>')) {
+                break
+            }
+            if (inApexSection && line.contains('<members>') && !line.contains('*')) {
+                def className = line.replaceAll(/.*<members>([^<]+)<\/members>.*/, '$1').trim()
+                if (className.endsWith('_TEST')) {
+                    testClasses.add(className)
+                }
+            }
+        }
+        
+        if (testClasses.size() > 0) {
+            return testClasses.collect { "--tests ${it}" }.join(' ')
+        } else {
+            echo "⚠️ No se encontraron test classes en el package, usando configuración por defecto"
+            return "--tests HSU_SistemasUpdater_TEST --tests HSU_UTSUpdater_TEST"
+        }
+        
+    } catch (Exception e) {
+        echo "⚠️ Error extrayendo tests del package: ${e.getMessage()}"
+        return "--tests HSU_SistemasUpdater_TEST --tests HSU_UTSUpdater_TEST"
     }
 }
