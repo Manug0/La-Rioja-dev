@@ -1,11 +1,11 @@
 tests:
   core_tests:
-    - HSU_SistemasUpdater_TEST
-    - HSU_UTSUpdater_TEST
+    # Tests básicos que devem ser executados em todos os deploys
   extra_tests:
-    # Añade aquí los tests específicos para este deploy/PR
-    - HSU_OtroTest_TEST
-    - HSU_ClaseNueva_TEST
+    # Tests específicos para este deploy/PR
+    - HSU_SistemasUpdater_TEST
+
+
 
 environments:
   development:
