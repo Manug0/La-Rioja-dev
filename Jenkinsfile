@@ -178,7 +178,6 @@ pipeline {
     }
 }
 
-// Función para crear package.xml básico
 def createBasicPackage() {
     def packageXml = '''<?xml version="1.0" encoding="UTF-8"?>
 <Package xmlns="http://soap.sforce.com/2006/04/metadata">
@@ -193,7 +192,6 @@ def createBasicPackage() {
     echo "✅ package.xml básico creado"
 }
 
-// Función para actualizar el estado en GitHub
 def updateGitHubStatus(state, description, context) {
     try {
         def repoUrl = scm.getUserRemoteConfigs()[0].getUrl()
