@@ -163,7 +163,6 @@ pipeline {
                     🎉 DEPLOY A PRODUCCIÓN EXITOSO
 """
                     
-                    // Marcar el build como exitoso con descripción
                     currentBuild.description = "🎉 Deploy exitoso y verificado - GitHub actualizado"
                     currentBuild.result = 'SUCCESS'
                     
@@ -193,6 +192,20 @@ pipeline {
             }
         }
     }
+}
+
+def createBasicPackage() {
+    def packageXml = '''<?xml version="1.0" encoding="UTF-8"?>
+<Package xmlns="http://soap.sforce.com/2006/04/metadata">
+    <types>
+        <members>HSU_SistemasUpdater</members>
+        <name>ApexClass</name>
+    </types>
+    <version>59.0</version>
+</Package>'''
+
+    writeFile file: 'package.xml', text: packageXml
+    echo "✅ package.xml básico creado"
 }
 
 def updateGitHubStatus(state, description, context) {
@@ -230,19 +243,4 @@ def updateGitHubStatus(state, description, context) {
     } catch (Exception e) {
         echo "⚠️ Error actualizando GitHub status: ${e.getMessage()}"
     }
-}
-
-// Función para crear package.xml básico
-def createBasicPackage() {
-    def packageXml = '''<?xml version="1.0" encoding="UTF-8"?>
-<Package xmlns="http://soap.sforce.com/2006/04/metadata">
-    <types>
-        <members>HSU_SistemasUpdater</members>
-        <name>ApexClass</name>
-    </types>
-    <version>59.0</version>
-</Package>'''
-
-    writeFile file: 'package.xml', text: packageXml
-    echo "✅ package.xml básico creado"
 }
