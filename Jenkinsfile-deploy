@@ -49,12 +49,10 @@ pipeline {
             steps {
                 script {
                     updateGitHubStatus('pending', 'Preparando package para deploy...', 'production-deploy')
-                    
                     echo "📦 Generando package para deploy..."
-                    
-                    // Crear directorio package si no existe
+
                     bat "if not exist package mkdir package"
-                    
+
                     try {
                         // Intentar obtener los cambios del último merge
                         def lastMergeCommit = bat(script: "git log --merges -1 --pretty=format:%%H", returnStdout: true).trim()
@@ -74,16 +72,18 @@ pipeline {
                                 echo "✅ Package.xml generado con delta"
                             } else {
                                 echo "⚠️ Plugin sfdx-git-delta no encontrado, usando package completo"
+                                createBasicPackage()
                             }
                         } else {
                             echo "⚠️ No se pudo determinar el delta, usando package completo"
+                            createBasicPackage()
                         }
-                        
                     } catch (Exception e) {
                         echo "⚠️ Error generando delta: ${e.getMessage()}"
                         echo "🔄 Usando package completo como fallback"
+                        createBasicPackage()
                     }
-                    
+
                     // Verificar que el package.xml existe
                     if (fileExists('package\\package.xml')) {
                         echo "📄 Contenido del package.xml:"
@@ -156,27 +156,11 @@ pipeline {
         }
         success { 
             script {
-                // Solo marcar como exitoso si TODAS las verificaciones pasaron
                 if (env.DEPLOY_VERIFIED == "true" && env.SMOKE_TESTS_PASSED == "true") {
-                    // ✅ ÉXITO COMPLETO - Notificar a GitHub
                     updateGitHubStatus('success', 'Deploy completado exitosamente en producción', 'production-deploy')
                     
                     echo """
-╔══════════════════════════════════════════════════════════════╗
-║               🎉 DEPLOY A PRODUCCIÓN EXITOSO                 ║
-╠══════════════════════════════════════════════════════════════╣
-║ Branch: ${env.BRANCH_NAME}                                   ║
-║ Commit: ${env.GIT_COMMIT?.take(8)}                           ║
-║ Fecha: ${new Date()}                                         ║
-║ Tipo de Deploy: ${env.DEPLOY_TYPE}                           ║
-║                                                              ║
-║ ✅ ESTADO: Código desplegado exitosamente en producción     ║
-║ ✅ VERIFICACIÓN: Deploy confirmado como exitoso             ║
-║ ✅ SMOKE TESTS: Org funcionando correctamente               ║
-║ ✅ GITHUB: Status actualizado como SUCCESS                  ║
-║                                                              ║
-║ 🌟 Main branch ahora marcada como exitosa en GitHub         ║
-╚══════════════════════════════════════════════════════════════╝
+                    🎉 DEPLOY A PRODUCCIÓN EXITOSO
 """
                     
                     // Marcar el build como exitoso con descripción
@@ -196,25 +180,10 @@ pipeline {
         }
         failure { 
             script {
-                // ❌ FALLO - Notificar a GitHub
                 updateGitHubStatus('failure', 'Deploy falló - Revisar logs de Jenkins', 'production-deploy')
                 
                 echo """
-╔══════════════════════════════════════════════════════════════╗
-║                💥 DEPLOY A PRODUCCIÓN FALLÓ                  ║
-╠══════════════════════════════════════════════════════════════╣
-║ Branch: ${env.BRANCH_NAME}                                   ║
-║ Commit: ${env.GIT_COMMIT?.take(8)}                           ║
-║ Fecha: ${new Date()}                                         ║
-║ Tipo de Deploy: ${env.DEPLOY_TYPE ?: 'No especificado'}      ║
-║                                                              ║
-║ ❌ ESTADO: Deploy falló - Producción NO afectada             ║
-║ ❌ GITHUB: Status marcado como FAILED                        ║
-║                                                              ║
-║ 🔴 Main branch marcada como fallida hasta resolución         ║
-║                                                              ║
-║ Ver detalles en Jenkins para más información                 ║
-╚══════════════════════════════════════════════════════════════╝
+                💥 DEPLOY A PRODUCCIÓN FALLÓ
 """
             }
         }
@@ -261,4 +230,19 @@ def updateGitHubStatus(state, description, context) {
     } catch (Exception e) {
         echo "⚠️ Error actualizando GitHub status: ${e.getMessage()}"
     }
+}
+
+// Función para crear package.xml básico
+def createBasicPackage() {
+    def packageXml = '''<?xml version="1.0" encoding="UTF-8"?>
+<Package xmlns="http://soap.sforce.com/2006/04/metadata">
+    <types>
+        <members>HSU_SistemasUpdater</members>
+        <name>ApexClass</name>
+    </types>
+    <version>59.0</version>
+</Package>'''
+
+    writeFile file: 'package.xml', text: packageXml
+    echo "✅ package.xml básico creado"
 }
