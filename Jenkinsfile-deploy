@@ -90,8 +90,9 @@ pipeline {
                         bat "type package\\package.xml"
                         echo "✅ Package.xml listo para deploy"
                     } else {
-                        updateGitHubStatus('failure', 'Error preparando package - Deploy cancelado', 'production-deploy')
-                        error("❌ Error: package.xml no encontrado")
+                        createBasicPackage()
+                        echo "❌ ERROR: package.xml no encontrado, usando package básico"
+                        updateGitHubStatus('failure', 'Package.xml no encontrado - Deploy fallido', 'production-deploy')
                     }
                 }
             }
