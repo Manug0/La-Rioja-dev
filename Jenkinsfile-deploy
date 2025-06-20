@@ -51,6 +51,7 @@ pipeline {
                     updateGitHubStatus('pending', 'Preparando package para deploy...', 'production-deploy')
                     echo "📦 Generando package para deploy..."
 
+                    // Crear carpeta package
                     bat "if not exist package mkdir package"
 
                     try {
@@ -68,7 +69,8 @@ pipeline {
                             def pluginCheck = bat(script: "${SF_CMD} plugins | findstr sfdx-git-delta", returnStatus: true)
                             
                             if (pluginCheck == 0) {
-                                bat "\"${SF_CMD}\" sgd source delta --from \"${fromCommit}\" --to \"${toCommit}\" --output ."
+                                // CAMBIADO: Generar en carpeta package
+                                bat "\"${SF_CMD}\" sgd source delta --from \"${fromCommit}\" --to \"${toCommit}\" --output package --generate-delta"
                                 echo "✅ Package.xml generado con delta"
                             } else {
                                 echo "⚠️ Plugin sfdx-git-delta no encontrado, usando package completo"
@@ -90,9 +92,8 @@ pipeline {
                         bat "type package\\package.xml"
                         echo "✅ Package.xml listo para deploy"
                     } else {
+                        echo "❌ ERROR: package.xml no encontrado, creando package básico"
                         createBasicPackage()
-                        echo "❌ ERROR: package.xml no encontrado, usando package básico"
-                        updateGitHubStatus('failure', 'Package.xml no encontrado - Deploy fallido', 'production-deploy')
                     }
                 }
             }
@@ -205,8 +206,9 @@ def createBasicPackage() {
     <version>59.0</version>
 </Package>'''
 
-    writeFile file: 'package.xml', text: packageXml
-    echo "✅ package.xml básico creado"
+    // CAMBIADO: Crear en carpeta package, no en raíz
+    writeFile file: 'package/package.xml', text: packageXml
+    echo "✅ package.xml básico creado en package/"
 }
 
 def updateGitHubStatus(state, description, context) {
