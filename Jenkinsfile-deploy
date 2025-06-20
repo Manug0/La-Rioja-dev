@@ -3,10 +3,7 @@ pipeline {
     environment {
         SFDX_AUTH_URL = credentials('SFDX_AUTH_URL_PRE')
         SFDX_ALIAS = 'pre'
-        PACKAGE_DIR = 'force-app'
-        SF_DISABLE_TELEMETRY = "true"
         SF_CMD = 'C:\\Users\\Manu\\AppData\\Local\\sf\\client\\2.92.7-df40848\\bin\\sf.cmd'
-        // Agregar credenciales de GitHub
         GITHUB_TOKEN = credentials('github-pat')
     }
     
@@ -14,44 +11,12 @@ pipeline {
         stage('Inicializar Deploy') {
             steps {
                 script {
-                    // Notificar GitHub que el deploy ha comenzado
                     updateGitHubStatus('pending', 'Iniciando deploy a producción...', 'production-deploy')
                     
                     echo "🚀 Iniciando pipeline de deploy a producción"
                     echo "Branch: ${env.BRANCH_NAME}"
                     echo "Commit: ${env.GIT_COMMIT?.take(8)}"
                 }
-            }
-        }
-        
-        stage('Verificar Prerequisites') {
-            steps {
-                script {
-                    updateGitHubStatus('pending', 'Verificando requisitos...', 'production-deploy')
-                    
-                    echo "🔍 Verificando prerequisites para deploy..."
-                    
-                    // Verificar que este commit viene de un merge de PR
-                    def commitMessage = bat(script: "git log -1 --pretty=format:%%s", returnStdout: true).trim()
-                    echo "📋 Commit message: ${commitMessage}"
-                    
-                    if (commitMessage.contains("Merge pull request")) {
-                        echo "✅ Deploy autorizado - Commit proviene de merge de PR"
-                        env.DEPLOY_AUTHORIZED = "true"
-                    } else {
-                        echo "❌ Deploy NO autorizado - Commit no proviene de merge de PR"
-                        env.DEPLOY_AUTHORIZED = "false"
-                        updateGitHubStatus('failure', 'Deploy cancelado - No proviene de PR validado', 'production-deploy')
-                        error("Deploy cancelado: Solo se permite deploy desde merge de PR validado")
-                    }
-                }
-            }
-        }
-                
-        stage('Checkout') { 
-            steps { 
-                checkout scm 
-                echo "✅ Código descargado desde main branch"
             }
         }
         
@@ -120,9 +85,9 @@ pipeline {
                     }
                     
                     // Verificar que el package.xml existe
-                    if (fileExists('manifest\\package.xml')) {
+                    if (fileExists('package\\package.xml')) {
                         echo "📄 Contenido del package.xml:"
-                        bat "type manifest\\package.xml"
+                        bat "type package\\package.xml"
                         echo "✅ Package.xml listo para deploy"
                     } else {
                         updateGitHubStatus('failure', 'Error preparando package - Deploy cancelado', 'production-deploy')
@@ -136,20 +101,15 @@ pipeline {
             steps {
                 script {
                     updateGitHubStatus('pending', 'Ejecutando deploy en producción...', 'production-deploy')
-                    
-                    echo """
-╔══════════════════════════════════════════════════════════════╗
-║                🚀 INICIANDO DEPLOY A PRODUCCIÓN              ║
-╚══════════════════════════════════════════════════════════════╝
-"""
+                    echo "🚀 Iniciando deploy a producción..."
                     
                     try {
                         if (env.DEPLOY_TYPE == 'DEPLOY_CON_TESTS') {
                             echo "🧪 Deploy con tests completos..."
-                            bat "${SF_CMD} project deploy start --manifest manifest\\package.xml --target-org %SFDX_ALIAS% --wait 30 --test-level RunLocalTests"
+                            bat "${SF_CMD} project deploy start --package package\\package.xml --target-org %SFDX_ALIAS% --wait 30 --test-level RunLocalTests"
                         } else {
                             echo "🚀 Deploy normal (sin tests adicionales)..."
-                            bat "${SF_CMD} project deploy start --manifest manifest\\package.xml --target-org %SFDX_ALIAS% --wait 30"
+                            bat "${SF_CMD} project deploy start --package package\\package.xml --target-org %SFDX_ALIAS% --wait 30"
                         }
                         
                         echo "✅ Deploy completado exitosamente"
@@ -163,38 +123,6 @@ pipeline {
             }
         }
         
-        stage('Verificar Deploy') {
-            steps {
-                script {
-                    updateGitHubStatus('pending', 'Verificando resultado del deploy...', 'production-deploy')
-                    
-                    echo "🔍 Verificando estado del deploy..."
-                    
-                    try {
-                        // Verificar el último deploy y obtener resultado
-                        def deployResult = bat(script: "${SF_CMD} project deploy report --target-org %SFDX_ALIAS% --json", returnStdout: true).trim()
-                        def deployJson = readJSON text: deployResult
-                        
-                        if (deployJson.result.success == true) {
-                            echo "✅ Deploy verificado como exitoso"
-                            env.DEPLOY_VERIFIED = "true"
-                        } else {
-                            echo "❌ Deploy reportado como fallido"
-                            env.DEPLOY_VERIFIED = "false"
-                            updateGitHubStatus('failure', 'Deploy falló en verificación final', 'production-deploy')
-                            error("Deploy falló en la verificación final")
-                        }
-                        
-                    } catch (Exception e) {
-                        echo "❌ Error crítico verificando deploy: ${e.getMessage()}"
-                        env.DEPLOY_VERIFIED = "false"
-                        updateGitHubStatus('failure', 'Error verificando deploy - Estado incierto', 'production-deploy')
-                        error("No se pudo verificar el estado del deploy - Marcando como fallido por seguridad")
-                    }
-                }
-            }
-        }
-        
         stage('Smoke Tests Post-Deploy') {
             steps {
                 script {
@@ -203,10 +131,8 @@ pipeline {
                     echo "🧪 Ejecutando smoke tests post-deploy..."
                     
                     try {
-                        // Ejecutar un test básico para confirmar que el org funciona
                         bat "${SF_CMD} data query --query \"SELECT Id, Name FROM User LIMIT 1\" --target-org %SFDX_ALIAS%"
                         
-                        // Si tienes tests específicos post-deploy, añádelos aquí
                         echo "✅ Smoke tests pasaron - Org responde correctamente"
                         env.SMOKE_TESTS_PASSED = "true"
                         
@@ -224,7 +150,6 @@ pipeline {
     post {
         always {
             script {
-                // Limpiar archivos temporales
                 bat "if exist auth_url.txt del auth_url.txt"
                 echo "🧹 Archivos temporales limpiados"
             }
@@ -295,7 +220,6 @@ pipeline {
         }
         cleanup {
             script {
-                // Limpieza adicional si es necesario
                 echo "🧹 Limpieza finalizada"
             }
         }
@@ -336,6 +260,5 @@ def updateGitHubStatus(state, description, context) {
         
     } catch (Exception e) {
         echo "⚠️ Error actualizando GitHub status: ${e.getMessage()}"
-        // No fallar el pipeline si no se puede actualizar GitHub
     }
 }

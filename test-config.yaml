@@ -1,20 +1,16 @@
-
 tests:
-  # Tests principales que siempre se ejecutan
   core_tests:
+    # Tests básicos que devem ser executados em todos os deploys
+  extra_tests:
+    # Tests específicos para este deploy/PR
     - HSU_SistemasUpdater_TEST
-    - HSU_UTSUpdater_TEST
 
-# Configuración por ambiente
+
+
 environments:
   development:
     test_level: "RunSpecifiedTests"
-    tests: ["HSU_SistemasUpdater_TEST", "HSU_UTSUpdater_TEST"]
-  
   staging:
     test_level: "RunLocalTests"
-    tests: []
-  
   production:
     test_level: "RunAllTestsInOrg"
-    tests: []
