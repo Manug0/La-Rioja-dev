@@ -109,7 +109,7 @@ pipeline {
                             bat "${SF_CMD} project deploy start --package package\\package.xml --target-org %SFDX_ALIAS% --wait 30 --test-level RunLocalTests"
                         } else {
                             echo "🚀 Deploy normal (sin tests adicionales)..."
-                            bat "${SF_CMD} project deploy start --package package\\package.xml --target-org %SFDX_ALIAS% --wait 30"
+                            bat "${SF_CMD} project deploy start --manifest package\\package.xml --target-org %SFDX_ALIAS% --wait 30"
                         }
                         
                         echo "✅ Deploy completado exitosamente"
