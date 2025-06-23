@@ -22,7 +22,7 @@ pipeline {
         stage('Crear package.xml con delta') {
             steps {
                 script {
-                    echo "📦 Creando package.xml de validación usando dif entre HSU_START y HEAD..."
+                    echo "📦 Creando package.xml de validación usando dif entre ${env.GITHUB_HSU_TAG} y HEAD..."
 
                     // Asegúrate de tener los tags locales
                     bat "git fetch --tags"
@@ -33,18 +33,12 @@ pipeline {
                     bat "${SF_CMD} org login sfdx-url --sfdx-url-file auth_url.txt --alias %SFDX_ALIAS%"
                     echo "✅ Autenticación exitosa"
 
-                    // Determinar commits
-                    def fromCommit = bat(script: "git rev-list -n 1 HSU_START", returnStdout: true).trim()
-                    def toCommit = bat(script: "git rev-parse HEAD", returnStdout: true).trim()
-
-                    echo "Generando delta entre ${fromCommit} (HSU_START) y ${toCommit} (HEAD)..."
-
                     // Crear carpeta package
                     bat "if not exist package mkdir package"
 
                     try {
                         // Generar delta con sgd
-                        bat "\"${SF_CMD}\" sgd source delta --from \"${env.GITHUB_HSU_TAG}\" --to \"${toCommit}\" --output package --generate-delta"
+                        bat "\"${SF_CMD}\" sgd source delta --from \"${env.GITHUB_HSU_TAG}\" --to HEAD --output package --generate-delta"
                         echo "✅ package.xml generado con delta"
                     } catch (Exception e) {
                         echo "❌ Error generando delta: ${e.getMessage()}"
