@@ -38,16 +38,16 @@ pipeline {
 
                     try {
                         // Generar delta con sgd
-                        bat "\"${SF_CMD}\" sgd source delta --from \"${env.GITHUB_HSU_TAG}\" --to HEAD --output package --generate-delta"
+                        bat "\"${SF_CMD}\" sgd source delta --from \"${env.GITHUB_HSU_TAG}\" --to HEAD --output manifest --generate-delta"
                         echo "✅ package.xml generado con delta"
                     } catch (Exception e) {
                         echo "❌ Error generando delta: ${e.getMessage()}"
                     }
 
                     // Verificar package.xml
-                    if (fileExists('package\\package.xml')) {
+                    if (fileExists('manifest\\package.xml')) {
                         echo "📄 Contenido de package.xml:"
-                        bat "type package\\package.xml"
+                        bat "type manifest\\package.xml"
                     } else {
                         echo "❌ No se generó package.xml"
                     }
@@ -63,7 +63,7 @@ pipeline {
 
                     try {
                         // Ajusta el testLevel según tus necesidades
-                        bat "${SF_CMD} project deploy validate --manifest package\\package.xml --test-level RunLocalTests --target-org %SFDX_ALIAS%"
+                        bat "${SF_CMD} project deploy validate --manifest manifest\\package.xml --test-level RunLocalTests --target-org %SFDX_ALIAS%"
                         updateGitHubStatus('success', 'Validación exitosa', 'pr-validation')
                         echo "✅ Validación completada sin errores"
                     } catch (Exception e) {
