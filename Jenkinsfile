@@ -24,6 +24,9 @@ pipeline {
                 script {
                     echo "📦 Creando package.xml de validación usando dif entre HSU_START y HEAD..."
 
+                    // Asegúrate de tener los tags locales
+                    bat "git fetch --tags"
+
                     // Autenticación
                     echo "🔐 Autenticando con Salesforce..."
                     bat 'echo %SFDX_AUTH_URL% > auth_url.txt'
@@ -41,7 +44,7 @@ pipeline {
 
                     try {
                         // Generar delta con sgd
-                        bat "\"${SF_CMD}\" sgd source delta --from ${GITHUB_HSU_TAG} --to \"${toCommit}\" --output package --generate-delta"
+                        bat "\"${SF_CMD}\" sgd source delta --from HSU_START --to \"${toCommit}\" --output package --generate-delta"
                         echo "✅ package.xml generado con delta"
                     } catch (Exception e) {
                         echo "❌ Error generando delta: ${e.getMessage()}"
