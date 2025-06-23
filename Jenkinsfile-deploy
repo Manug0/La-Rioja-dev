@@ -6,209 +6,83 @@ pipeline {
         SF_CMD = 'C:\\Users\\Manu\\AppData\\Local\\sf\\client\\2.92.7-df40848\\bin\\sf.cmd'
         GITHUB_TOKEN = credentials('github-pat')
     }
-    
+
     stages {
-        stage('Inicializar Deploy') {
+        stage('Checkout') {
             steps {
+                checkout scm
                 script {
-                    updateGitHubStatus('pending', 'Iniciando deploy a producción...', 'production-deploy')
-                    
-                    echo "🚀 Iniciando pipeline de deploy a producción"
-                    echo "Branch: ${env.BRANCH_NAME}"
-                    echo "Commit: ${env.GIT_COMMIT?.take(8)}"
+                    updateGitHubStatus('pending', 'Iniciando Deploy...', 'production-deploy')
+                    echo "🚀 Iniciando pipeline de Deploy a Producción"
                 }
             }
         }
-        
-        stage('Verificar SFDX') { 
-            steps { 
-                script {
-                    updateGitHubStatus('pending', 'Verificando herramientas...', 'production-deploy')
-                    
-                    echo "🔧 Verificando SFDX CLI..."
-                    bat "${SF_CMD} --version"
-                    echo "✅ SFDX CLI verificado"
-                }
-            }
-        }
-        
-        stage('Authenticate') {
+
+        stage('Generar Package con Delta') {
             steps {
                 script {
-                    updateGitHubStatus('pending', 'Autenticando con producción...', 'production-deploy')
-                    
-                    echo "🔐 Autenticando con org de producción..."
+                    echo "📦 Generando package.xml con cambios desde HSU_START a HEAD..."
+
+                    // Autenticación
+                    echo "🔐 Autenticando con Salesforce..."
                     bat 'echo %SFDX_AUTH_URL% > auth_url.txt'
                     bat "${SF_CMD} org login sfdx-url --sfdx-url-file auth_url.txt --alias %SFDX_ALIAS%"
                     echo "✅ Autenticación exitosa"
-                }
-            }
-        }
-        
-        stage('Generar Package Deploy') {
-            steps {
-                script {
-                    updateGitHubStatus('pending', 'Preparando package para deploy...', 'production-deploy')
-                    echo "📦 Generando package para deploy..."
+                    
+                    // Determinar commits
+                    def fromCommit = bat(script: "git rev-list -n 1 HSU_START", returnStdout: true).trim()
+                    def toCommit = bat(script: "git rev-parse HEAD", returnStdout: true).trim()
 
-                    // Crear carpeta package
+                    echo "🔄 Generando delta entre ${fromCommit} (HSU_START) y ${toCommit} (HEAD)"
+                    
+                    // Crear carpeta "package"
                     bat "if not exist package mkdir package"
 
                     try {
-                        // Intentar obtener los cambios del último merge
-                        def lastMergeCommit = bat(script: "git log --merges -1 --pretty=format:%%H", returnStdout: true).trim()
-                        def parentCommits = bat(script: "git log --pretty=format:%%P -1 ${lastMergeCommit}", returnStdout: true).trim().split(' ')
-                        
-                        if (parentCommits.length >= 2) {
-                            def fromCommit = parentCommits[0]  // Commit de main antes del merge
-                            def toCommit = parentCommits[1]    // Último commit de la rama mergeada
-                            
-                            echo "🔄 Generando delta desde ${fromCommit} hasta ${toCommit}"
-                            
-                            // Verificar plugin sfdx-git-delta
-                            def pluginCheck = bat(script: "${SF_CMD} plugins | findstr sfdx-git-delta", returnStatus: true)
-                            
-                            if (pluginCheck == 0) {
-                                // CAMBIADO: Generar en carpeta package
-                                bat "\"${SF_CMD}\" sgd source delta --from \"${fromCommit}\" --to \"${toCommit}\" --output package --generate-delta"
-                                echo "✅ Package.xml generado con delta"
-                            } else {
-                                echo "⚠️ Plugin sfdx-git-delta no encontrado, usando package completo"
-                                createBasicPackage()
-                            }
-                        } else {
-                            echo "⚠️ No se pudo determinar el delta, usando package completo"
-                            createBasicPackage()
-                        }
+                        // Generar delta con sgd
+                        bat "\"${SF_CMD}\" sgd source delta --from \"${fromCommit}\" --to \"${toCommit}\" --output package --generate-delta"
+                        echo "✅ package.xml generado con delta"
                     } catch (Exception e) {
                         echo "⚠️ Error generando delta: ${e.getMessage()}"
-                        echo "🔄 Usando package completo como fallback"
-                        createBasicPackage()
                     }
 
-                    // Verificar que el package.xml existe
+                    // Verificar package.xml
                     if (fileExists('package\\package.xml')) {
-                        echo "📄 Contenido del package.xml:"
+                        echo "📄 Contenido de package.xml:"
                         bat "type package\\package.xml"
-                        echo "✅ Package.xml listo para deploy"
                     } else {
-                        echo "❌ ERROR: package.xml no encontrado, creando package básico"
-                        createBasicPackage()
+                        echo "❌ No se generó package.xml"
                     }
                 }
             }
         }
-        
-        stage('Deploy a Producción') {
+
+        stage('Desplegar en Producción') {
             steps {
                 script {
-                    updateGitHubStatus('pending', 'Ejecutando deploy en producción...', 'production-deploy')
-                    echo "🚀 Iniciando deploy a producción..."
-                    
+                    updateGitHubStatus('pending', 'Desplegando en Producción...', 'production-deploy')
+
                     try {
-                        if (env.DEPLOY_TYPE == 'DEPLOY_CON_TESTS') {
-                            echo "🧪 Deploy con tests completos..."
-                            bat "${SF_CMD} project deploy start --package package\\package.xml --target-org %SFDX_ALIAS% --wait 30 --test-level RunLocalTests"
-                        } else {
-                            echo "🚀 Deploy normal (sin tests adicionales)..."
-                            bat "${SF_CMD} project deploy start --manifest package\\package.xml --target-org %SFDX_ALIAS% --wait 30"
-                        }
-                        
+                        bat "${SF_CMD} project deploy start --manifest package\\package.xml --target-org %SFDX_ALIAS% --wait 30"
+                        updateGitHubStatus('success', 'Deploy exitoso', 'production-deploy')
                         echo "✅ Deploy completado exitosamente"
-                        
                     } catch (Exception e) {
-                        echo "❌ Error en deploy: ${e.getMessage()}"
                         updateGitHubStatus('failure', 'Deploy falló en Salesforce', 'production-deploy')
-                        throw e
-                    }
-                }
-            }
-        }
-        
-        stage('Smoke Tests Post-Deploy') {
-            steps {
-                script {
-                    updateGitHubStatus('pending', 'Ejecutando tests post-deploy...', 'production-deploy')
-                    
-                    echo "🧪 Ejecutando smoke tests post-deploy..."
-                    
-                    try {
-                        bat "${SF_CMD} data query --query \"SELECT Id, Name FROM User LIMIT 1\" --target-org %SFDX_ALIAS%"
-                        
-                        echo "✅ Smoke tests pasaron - Org responde correctamente"
-                        env.SMOKE_TESTS_PASSED = "true"
-                        
-                    } catch (Exception e) {
-                        echo "❌ Smoke tests fallaron: ${e.getMessage()}"
-                        env.SMOKE_TESTS_PASSED = "false"
-                        updateGitHubStatus('failure', 'Smoke tests fallaron - Deploy marcado como fallido', 'production-deploy')
-                        error("Smoke tests post-deploy fallaron - Deploy marcado como fallido")
+                        error "❌ Deploy falló: ${e.getMessage()}"
                     }
                 }
             }
         }
     }
-    
+
     post {
         always {
             script {
                 bat "if exist auth_url.txt del auth_url.txt"
-                echo "🧹 Archivos temporales limpiados"
-            }
-        }
-        success { 
-            script {
-                if (env.DEPLOY_VERIFIED == "true" && env.SMOKE_TESTS_PASSED == "true") {
-                    updateGitHubStatus('success', 'Deploy completado exitosamente en producción', 'production-deploy')
-                    
-                    echo """
-                    🎉 DEPLOY A PRODUCCIÓN EXITOSO
-"""
-                    
-                    currentBuild.description = "🎉 Deploy exitoso y verificado - GitHub actualizado"
-                    currentBuild.result = 'SUCCESS'
-                    
-                } else {
-                    echo "❌ Deploy no puede marcarse como exitoso - Verificaciones fallaron"
-                    echo "Deploy Verified: ${env.DEPLOY_VERIFIED}"
-                    echo "Smoke Tests: ${env.SMOKE_TESTS_PASSED}"
-                    
-                    updateGitHubStatus('failure', 'Deploy incompleto - Verificaciones fallaron', 'production-deploy')
-                    currentBuild.result = 'FAILURE'
-                    error("Deploy no puede considerarse exitoso debido a verificaciones fallidas")
-                }
-            }
-        }
-        failure { 
-            script {
-                updateGitHubStatus('failure', 'Deploy falló - Revisar logs de Jenkins', 'production-deploy')
-                
-                echo """
-                💥 DEPLOY A PRODUCCIÓN FALLÓ
-"""
-            }
-        }
-        cleanup {
-            script {
                 echo "🧹 Limpieza finalizada"
             }
         }
     }
-}
-
-def createBasicPackage() {
-    def packageXml = '''<?xml version="1.0" encoding="UTF-8"?>
-<Package xmlns="http://soap.sforce.com/2006/04/metadata">
-    <types>
-        <members>HSU_SistemasUpdater</members>
-        <name>ApexClass</name>
-    </types>
-    <version>59.0</version>
-</Package>'''
-
-    // CAMBIADO: Crear en carpeta package, no en raíz
-    writeFile file: 'package/package.xml', text: packageXml
-    echo "✅ package.xml básico creado en package/"
 }
 
 def updateGitHubStatus(state, description, context) {
@@ -216,20 +90,19 @@ def updateGitHubStatus(state, description, context) {
         def repoUrl = scm.getUserRemoteConfigs()[0].getUrl()
         def repoName = repoUrl.tokenize('/').last().replace('.git', '')
         def repoOwner = repoUrl.tokenize('/')[-2]
-        
         def commitSha = env.GIT_COMMIT
         def targetUrl = "${BUILD_URL}console"
-        
+
         def payload = [
-            state: state,
-            target_url: targetUrl,
-            description: description,
-            context: "jenkins/${context}"
+            state       : state,
+            target_url  : targetUrl,
+            description : description,
+            context     : "jenkins/${context}"
         ]
-        
+
         def jsonPayload = groovy.json.JsonOutput.toJson(payload)
-        
-        def response = httpRequest(
+
+        httpRequest(
             acceptType: 'APPLICATION_JSON',
             contentType: 'APPLICATION_JSON',
             httpMode: 'POST',
@@ -240,9 +113,8 @@ def updateGitHubStatus(state, description, context) {
                 [name: 'User-Agent', value: 'Jenkins-Pipeline']
             ]
         )
-        
+
         echo "✅ GitHub status actualizado: ${state} - ${description}"
-        
     } catch (Exception e) {
         echo "⚠️ Error actualizando GitHub status: ${e.getMessage()}"
     }

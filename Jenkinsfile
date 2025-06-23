@@ -12,151 +12,69 @@ pipeline {
             steps {
                 checkout scm
                 script {
-                    updateGitHubStatus('pending', 'Iniciando validación de PR...', 'pr-validation')
-                    echo "🔄 Iniciando validación de PR..."
-                    echo "PR: ${env.CHANGE_TITLE}"
-                    echo "Autor: ${env.CHANGE_AUTHOR}"
-                    echo "Branch: ${env.CHANGE_BRANCH} -> ${env.CHANGE_TARGET}"
+                    updateGitHubStatus('pending', 'Iniciando validación...', 'pr-validation')
+                    echo "🔄 Iniciando validación de PR/Push..."
                 }
             }
         }
 
-        stage('Obtener información Git') {
+        stage('Crear package.xml con delta') {
             steps {
                 script {
-                    updateGitHubStatus('pending', 'Analizando cambios...', 'pr-validation')
-                    try {
-                        def gitLog = bat(script: "git log --oneline -n 2", returnStdout: true).trim()
-                        echo "📋 Últimos 2 commits:"
-                        echo gitLog
+                    echo "📦 Creando package.xml de validación usando dif entre HSU_START y HEAD..."
 
-                        def currentCommit = bat(script: "git rev-parse HEAD", returnStdout: true).trim()
-                        def previousCommit = bat(script: "git rev-parse HEAD~1", returnStdout: true).trim()
-
-                        env.CURRENT_COMMIT = currentCommit.replaceAll(/[\r\n\s]/, '')
-                        env.PREVIOUS_COMMIT = previousCommit.replaceAll(/[\r\n\s]/, '')
-
-                        echo "🔍 Commit actual: '${env.CURRENT_COMMIT}'"
-                        echo "🔍 Commit anterior: '${env.PREVIOUS_COMMIT}'"
-
-                        if (env.CURRENT_COMMIT.length() == 40 && env.PREVIOUS_COMMIT.length() == 40) {
-                            env.COMMITS_VALID = "true"
-                            echo "✅ Commits válidos para generar delta"
-                        } else {
-                            env.COMMITS_VALID = "false"
-                            echo "⚠️ Commits no válidos, se usará package.xml básico"
-                        }
-                    } catch (Exception e) {
-                        echo "❌ Error obteniendo información de Git: ${e.getMessage()}"
-                        env.COMMITS_VALID = "false"
-                    }
-                }
-            }
-        }
-
-        stage('Verificar SFDX') {
-            steps {
-                script {
-                    updateGitHubStatus('pending', 'Verificando herramientas...', 'pr-validation')
-                    echo "🔧 Verificando SFDX CLI..."
-                    bat "${SF_CMD} --version"
-                    echo "✅ SFDX CLI verificado"
-                }
-            }
-        }
-
-        stage('Authenticate') {
-            steps {
-                script {
-                    updateGitHubStatus('pending', 'Autenticando con Salesforce...', 'pr-validation')
+                    // Autenticación
                     echo "🔐 Autenticando con Salesforce..."
                     bat 'echo %SFDX_AUTH_URL% > auth_url.txt'
                     bat "${SF_CMD} org login sfdx-url --sfdx-url-file auth_url.txt --alias %SFDX_ALIAS%"
                     echo "✅ Autenticación exitosa"
-                }
-            }
-        }
 
-        stage('Crear package.xml') {
-            steps {
-                script {
-                    updateGitHubStatus('pending', 'Preparando package de validación...', 'pr-validation')
-                    echo "📦 Creando package.xml..."
+                    // Determinar commits
+                    def fromCommit = bat(script: "git rev-list -n 1 HSU_START", returnStdout: true).trim()
+                    def toCommit = bat(script: "git rev-parse HEAD", returnStdout: true).trim()
+
+                    echo "Generando delta entre ${fromCommit} (HSU_START) y ${toCommit} (HEAD)..."
+
+                    // Crear carpeta package
                     bat "if not exist package mkdir package"
 
-                    if (env.COMMITS_VALID == "true") {
-                        echo "🔄 Intentando crear package.xml con delta de commits..."
-
-                        try {
-                            def pluginCheck = bat(script: "${SF_CMD} plugins | findstr sfdx-git-delta", returnStatus: true)
-
-                            if (pluginCheck == 0) {
-                                echo "✅ Plugin sfdx-git-delta encontrado, generando delta..."
-                                bat "\"${SF_CMD}\" sgd source delta --from \"${env.PREVIOUS_COMMIT}\" --to \"${env.CURRENT_COMMIT}\" --output manifest --generate-delta"
-
-                                if (fileExists('package\\package.xml')) {
-                                    echo "✅ package.xml generado con delta exitosamente"
-                                } else {
-                                    echo "⚠️ No se generó package.xml, usando package básico"
-                                    createBasicPackage()
-                                }
-                            } else {
-                                echo "⚠️ Plugin sfdx-git-delta no encontrado, usando package básico"
-                                createBasicPackage()
-                            }
-
-                        } catch (Exception e) {
-                            echo "❌ Error generando delta: ${e.getMessage()}"
-                            echo "🔄 Creando package.xml básico como alternativa"
-                            createBasicPackage()
-                        }
-
-                    } else {
-                        echo "📋 Commits no válidos, creando package.xml básico"
+                    try {
+                        // Generar delta con sgd
+                        bat "\"${SF_CMD}\" sgd source delta --from \"${fromCommit}\" --to \"${toCommit}\" --output package --generate-delta"
+                        echo "✅ package.xml generado con delta"
+                    } catch (Exception e) {
+                        echo "❌ Error generando delta: ${e.getMessage()}"
+                        echo "🔄 Creando package.xml básico..."
                         createBasicPackage()
                     }
 
-                    // Verificar que package.xml existe
-                    bat "if exist package.xml (echo ✅ package.xml creado exitosamente) else (echo ❌ ERROR: package.xml no encontrado)"
-
-                    if (fileExists('package.xml')) {
-                        echo "📄 Contenido del package.xml:"
-                        bat "type package.xml"
-                    }
-                }
-            }
-        }
-
-        stage('Definir tests') {
-            steps {
-                script {
-                    echo "🧪 Configurando tests desde test-config.yaml..."
-                    def testConfig = readYaml file: 'test-config.yaml'
-                    def coreTests = testConfig.tests.core_tests ?: []
-                    def extraTests = testConfig.tests.extra_tests ?: []
-                    def allTests = coreTests + extraTests
-                    if (allTests.size() > 0) {
-                        env.TEST_FLAGS = allTests.collect { "--tests ${it}" }.join(' ')
-                        echo "✅ Tests configurados: ${env.TEST_FLAGS}"
+                    // Verificar package.xml
+                    if (fileExists('package\\package.xml')) {
+                        echo "📄 Contenido de package.xml:"
+                        bat "type package\\package.xml"
                     } else {
-                        echo "⚠️ No se encontraron tests en test-config.yaml, usando configuración por defecto"
-                        env.TEST_FLAGS = "--tests HSU_SistemasUpdater_TEST --tests HSU_UTSUpdater_TEST"
+                        echo "❌ No se generó package.xml, usando básico"
+                        createBasicPackage()
                     }
                 }
             }
         }
 
-        stage('Validar código') {
+        stage('Validar en Salesforce') {
             steps {
                 script {
-                    updateGitHubStatus('pending', 'Ejecutando validación y tests...', 'pr-validation')
-                    echo "🔍 Iniciando validación de código..."
+                    updateGitHubStatus('pending', 'Validando metadatos...', 'pr-validation')
+                    echo "🔍 Ejecutando validación (checkOnly) en Salesforce..."
+
                     try {
-                        bat "${SF_CMD} project deploy validate --manifest package.xml --test-level RunSpecifiedTests ${env.TEST_FLAGS} --target-org %SFDX_ALIAS%"
-                        echo "✅ Validación completada exitosamente"
+                        // Ajusta el testLevel según tus necesidades
+                        bat "${SF_CMD} project deploy validate --manifest package\\package.xml --test-level RunLocalTests --target-org %SFDX_ALIAS%"
+                        updateGitHubStatus('success', 'Validación exitosa', 'pr-validation')
+                        echo "✅ Validación completada sin errores"
                     } catch (Exception e) {
-                        echo "❌ Error en la validación: ${e.getMessage()}"
-                        throw e
+                        updateGitHubStatus('failure', 'Error en la validación', 'pr-validation')
+                        echo "❌ Validación fallida: ${e.getMessage()}"
+                        error "Validación fallida"
                     }
                 }
             }
@@ -166,13 +84,9 @@ pipeline {
     post {
         always {
             script {
-                updateGitHubStatus('success', 'Pipeline finalizado', 'pr-validation')
-                echo "🧹 Limpieza finalizada"
-            }
-        }
-        failure {
-            script {
-                updateGitHubStatus('failure', 'Pipeline fallido', 'pr-validation')
+                // Limpieza
+                bat "if exist auth_url.txt del auth_url.txt"
+                echo "🧹 Limpieza completada"
             }
         }
     }
@@ -187,8 +101,8 @@ def createBasicPackage() {
     </types>
     <version>59.0</version>
 </Package>'''
-
-    writeFile file: 'package.xml', text: packageXml
+    
+    writeFile file: 'package\\package.xml', text: packageXml
     echo "✅ package.xml básico creado"
 }
 
@@ -197,15 +111,14 @@ def updateGitHubStatus(state, description, context) {
         def repoUrl = scm.getUserRemoteConfigs()[0].getUrl()
         def repoName = repoUrl.tokenize('/').last().replace('.git', '')
         def repoOwner = repoUrl.tokenize('/')[-2]
-
         def commitSha = env.GIT_COMMIT
         def targetUrl = "${BUILD_URL}console"
 
         def payload = [
-            state: state,
-            target_url: targetUrl,
-            description: description,
-            context: "jenkins/${context}"
+            state       : state,
+            target_url  : targetUrl,
+            description : description,
+            context     : "jenkins/${context}"
         ]
 
         def jsonPayload = groovy.json.JsonOutput.toJson(payload)
@@ -227,6 +140,5 @@ def updateGitHubStatus(state, description, context) {
         echo "✅ GitHub status actualizado: ${state} - ${description}"
     } catch (Exception e) {
         echo "⚠️ Error actualizando GitHub status: ${e.getMessage()}"
-        // No fallar el pipeline si no se puede actualizar GitHub
     }
 }
