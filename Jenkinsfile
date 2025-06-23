@@ -2,6 +2,7 @@ pipeline {
     agent any
     environment {
         SFDX_AUTH_URL = credentials('SFDX_AUTH_URL_HSU')
+        GITHUB_HSU_TAG = 'HSU_START'
         SFDX_ALIAS = 'hsu'
         SF_CMD = 'C:\\Users\\Manu\\AppData\\Local\\sf\\client\\2.92.7-df40848\\bin\\sf.cmd'
         GITHUB_TOKEN = credentials('github-pat')
@@ -40,12 +41,10 @@ pipeline {
 
                     try {
                         // Generar delta con sgd
-                        bat "\"${SF_CMD}\" sgd source delta --from \"${fromCommit}\" --to \"${toCommit}\" --output package --generate-delta"
+                        bat "\"${SF_CMD}\" sgd source delta --from ${GITHUB_HSU_TAG} --to \"${toCommit}\" --output package --generate-delta"
                         echo "✅ package.xml generado con delta"
                     } catch (Exception e) {
                         echo "❌ Error generando delta: ${e.getMessage()}"
-                        echo "🔄 Creando package.xml básico..."
-                        createBasicPackage()
                     }
 
                     // Verificar package.xml
@@ -53,8 +52,7 @@ pipeline {
                         echo "📄 Contenido de package.xml:"
                         bat "type package\\package.xml"
                     } else {
-                        echo "❌ No se generó package.xml, usando básico"
-                        createBasicPackage()
+                        echo "❌ No se generó package.xml"
                     }
                 }
             }
@@ -90,20 +88,6 @@ pipeline {
             }
         }
     }
-}
-
-def createBasicPackage() {
-    def packageXml = '''<?xml version="1.0" encoding="UTF-8"?>
-<Package xmlns="http://soap.sforce.com/2006/04/metadata">
-    <types>
-        <members>HSU_SistemasUpdater</members>
-        <name>ApexClass</name>
-    </types>
-    <version>59.0</version>
-</Package>'''
-    
-    writeFile file: 'package\\package.xml', text: packageXml
-    echo "✅ package.xml básico creado"
 }
 
 def updateGitHubStatus(state, description, context) {
