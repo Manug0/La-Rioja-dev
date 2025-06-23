@@ -68,11 +68,23 @@ pipeline {
                         
                         // Generar delta usando sgd (Salesforce Git Delta)
                         echo "🔄 Ejecutando sgd para generar delta..."
-                        bat "\"${SF_CMD}\" sgd source delta --from \"${env.GITHUB_HSU_TAG}\" --to HEAD --output manifest --generate-delta"
+                        bat "\"${SF_CMD}\" sgd source delta --from \"${env.GITHUB_HSU_TAG}\" --to HEAD --output-dir manifest --generate-delta"
                         
-                        // Verificar si se generaron archivos
+                        // Verificar si se generaron archivos - SGD puede generar package/package.xml
+                        def packageXmlPath = ''
                         if (fileExists('manifest/package.xml')) {
-                            echo "✅ package.xml generado exitosamente"
+                            packageXmlPath = 'manifest/package.xml'
+                        } else if (fileExists('package/package.xml')) {
+                            packageXmlPath = 'package/package.xml'
+                            // Mover a manifest para consistencia
+                            bat "copy package\\package.xml manifest\\package.xml"
+                            if (fileExists('package/destructiveChanges.xml')) {
+                                bat "copy package\\destructiveChanges.xml manifest\\destructiveChanges.xml"
+                            }
+                        }
+                        
+                        if (packageXmlPath && fileExists(packageXmlPath)) {
+                            echo "✅ package.xml generado exitosamente en: ${packageXmlPath}"
                             echo "📄 Contenido del package.xml generado:"
                             bat "type manifest\\package.xml"
                             
@@ -81,8 +93,21 @@ pipeline {
                                 echo "🗑️ Se generó destructiveChanges.xml:"
                                 bat "type manifest\\destructiveChanges.xml"
                             }
+                            
+                            // Verificar si el package.xml tiene contenido real
+                            def packageContent = readFile('manifest/package.xml')
+                            if (!packageContent.contains('<types>')) {
+                                echo "⚠️ El package.xml no contiene metadatos (<types>), posiblemente solo cambios en Jenkinsfile"
+                                env.EMPTY_PACKAGE = 'true'
+                            } else {
+                                env.EMPTY_PACKAGE = 'false'
+                            }
                         } else {
-                            echo "⚠️ No se encontraron cambios entre ${env.GITHUB_HSU_TAG} y HEAD"
+                            echo "⚠️ No se encontró package.xml generado por SGD"
+                            echo "📋 Listando contenido de directorios:"
+                            bat "dir manifest"
+                            bat "if exist package dir package"
+                            
                             echo "📄 Creando package.xml vacío para evitar errores..."
                             bat """
                                 echo ^<?xml version="1.0" encoding="UTF-8"?^> > manifest\\package.xml
@@ -90,6 +115,7 @@ pipeline {
                                 echo     ^<version^>60.0^</version^> >> manifest\\package.xml
                                 echo ^</Package^> >> manifest\\package.xml
                             """
+                            env.EMPTY_PACKAGE = 'true'
                         }
                         
                     } catch (Exception e) {
@@ -115,8 +141,7 @@ pipeline {
                     echo "🔍 Ejecutando validación (checkOnly) en Salesforce..."
 
                     // Verificar si hay contenido para validar
-                    def packageContent = readFile('manifest/package.xml')
-                    if (packageContent.contains('<types>')) {
+                    if (env.EMPTY_PACKAGE == 'false') {
                         echo "📋 Se encontraron metadatos para validar"
                         
                         try {
@@ -209,7 +234,7 @@ def updateGitHubStatus(state, description, context) {
 
         def jsonPayload = groovy.json.JsonOutput.toJson(payload)
 
-        withCredentials([string(credentialsId: 'github-pat', variable: 'GH_TOKEN')]) {
+        withCredentials([usernamePassword(credentialsId: 'github-pat', usernameVariable: 'GH_USER', passwordVariable: 'GH_TOKEN')]) {
             httpRequest(
                 acceptType: 'APPLICATION_JSON',
                 contentType: 'APPLICATION_JSON',
