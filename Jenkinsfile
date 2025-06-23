@@ -44,7 +44,7 @@ pipeline {
 
                     try {
                         // Generar delta con sgd
-                        bat "\"${SF_CMD}\" sgd source delta --from \"${HSU_START}\" --to \"${toCommit}\" --output package --generate-delta"
+                        bat "\"${SF_CMD}\" sgd source delta --from \"${env.GITHUB_HSU_TAG}\" --to \"${toCommit}\" --output package --generate-delta"
                         echo "✅ package.xml generado con delta"
                     } catch (Exception e) {
                         echo "❌ Error generando delta: ${e.getMessage()}"
