@@ -13,175 +13,153 @@ pipeline {
             steps {
                 checkout scm
                 script {
+                    // Verificar si el repo está shallow antes de hacer unshallow
+                    def isShallow = bat(script: "git rev-parse --is-shallow-repository", returnStdout: true).trim()
+                    if (isShallow == 'true') {
+                        echo "📥 Repositorio shallow detectado, obteniendo historial completo..."
+                        bat "git fetch --unshallow"
+                    } else {
+                        echo "📥 Repositorio ya completo"
+                    }
+                    
+                    // Fetch de tags
+                    bat "git fetch --tags --force"
+                    
                     updateGitHubStatus('pending', 'Iniciando validación...', 'pr-validation')
                     echo "🔄 Iniciando validación de PR/Push..."
                 }
             }
         }
 
-        stage('Preparar entorno') {
+        stage('Crear package.xml con delta') {
             steps {
                 script {
-                    echo "🔧 Preparando entorno para generación de delta..."
-                    
-                    // Limpiar directorios anteriores
-                    bat "if exist manifest rmdir /s /q manifest"
-                    bat "if exist package rmdir /s /q package"
-                    
-                    // Crear directorios necesarios
-                    bat "mkdir manifest"
-                    bat "mkdir package"
-                    
-                    // Asegurar que tenemos todos los tags y commits
-                    bat "git fetch --all --tags --prune"
-                    
-                    echo "✅ Entorno preparado"
-                }
-            }
-        }
+                    echo "📦 Creando package.xml de validación usando dif entre ${env.GITHUB_HSU_TAG} y HEAD..."
 
-        stage('Autenticar Salesforce') {
-            steps {
-                script {
+                    // Verificar que el tag existe antes de continuar
+                    def tagExists = bat(script: "git tag -l ${env.GITHUB_HSU_TAG}", returnStdout: true).trim()
+                    if (!tagExists) {
+                        error "❌ Tag ${env.GITHUB_HSU_TAG} no encontrado en el repositorio"
+                    }
+                    echo "✅ Tag ${env.GITHUB_HSU_TAG} encontrado: ${tagExists}"
+
+                    // DIAGNÓSTICO: Verificar estructura del proyecto
+                    echo "🔍 DIAGNÓSTICO: Verificando estructura del proyecto..."
+                    
+                    // Verificar sfdx-project.json
+                    if (fileExists('sfdx-project.json')) {
+                        echo "✅ sfdx-project.json encontrado:"
+                        bat "type sfdx-project.json"
+                    } else {
+                        echo "❌ sfdx-project.json NO encontrado"
+                    }
+                    
+                    // Verificar estructura de directorios
+                    echo "📁 Estructura de directorios:"
+                    bat "dir /s /b force-app\\main\\default"
+                    
+                    // Verificar cambios específicos
+                    echo "📋 Cambios detectados por git:"
+                    bat "git diff --name-status ${env.GITHUB_HSU_TAG}..HEAD"
+                    
+                    // Verificar tipos de archivo
+                    echo "📄 Tipos de archivos modificados:"
+                    def changedFiles = bat(script: "git diff --name-only ${env.GITHUB_HSU_TAG}..HEAD", returnStdout: true).trim()
+                    echo "Archivos cambiados:"
+                    echo changedFiles
+                    
+                    // Filtrar archivos de Salesforce
+                    def sfFiles = []
+                    changedFiles.split('\n').each { file ->
+                        if (file.endsWith('.cls') || file.endsWith('.trigger') || 
+                            file.endsWith('.page') || file.endsWith('.component') || 
+                            file.endsWith('-meta.xml')) {
+                            sfFiles.add(file)
+                        }
+                    }
+                    echo "📄 Archivos de Salesforce modificados: ${sfFiles.join(', ')}"
+
+                    // Autenticación
                     echo "🔐 Autenticando con Salesforce..."
                     bat 'echo %SFDX_AUTH_URL% > auth_url.txt'
                     bat "${SF_CMD} org login sfdx-url --sfdx-url-file auth_url.txt --alias %SFDX_ALIAS%"
                     echo "✅ Autenticación exitosa"
-                }
-            }
-        }
 
-        stage('Generar package.xml con delta') {
-            steps {
-                script {
-                    echo "📦 Generando package.xml con cambios entre ${env.GITHUB_HSU_TAG} y HEAD..."
+                    // Limpiar y crear carpetas
+                    bat "if exist package rmdir /s /q package"
+                    bat "if exist manifest rmdir /s /q manifest"
+                    bat "mkdir manifest"
 
                     try {
-                        // Verificar que el tag existe
-                        def tagExists = bat(script: "git tag -l ${env.GITHUB_HSU_TAG}", returnStdout: true).trim()
-                        if (!tagExists) {
-                            error "❌ El tag ${env.GITHUB_HSU_TAG} no existe"
-                        }
+                        // VERSIÓN MEJORADA: Usar la nueva sintaxis recomendada
+                        echo "🔄 Ejecutando sgd para generar delta (versión mejorada)..."
                         
-                        echo "📋 Mostrando diferencias entre ${env.GITHUB_HSU_TAG} y HEAD:"
-                        bat "git diff --name-only ${env.GITHUB_HSU_TAG}..HEAD"
-                        
-                        // Generar delta usando sgd (Salesforce Git Delta)
-                        echo "🔄 Ejecutando sgd para generar delta..."
+                        // Opción 1: Usar la nueva sintaxis
                         bat "\"${SF_CMD}\" sgd source delta --from \"${env.GITHUB_HSU_TAG}\" --to HEAD --output-dir manifest --generate-delta"
                         
-                        // Verificar si se generaron archivos - SGD puede generar package/package.xml
-                        def packageXmlPath = ''
-                        if (fileExists('manifest/package.xml')) {
-                            packageXmlPath = 'manifest/package.xml'
-                        } else if (fileExists('package/package.xml')) {
-                            packageXmlPath = 'package/package.xml'
-                            // Mover a manifest para consistencia
-                            bat "copy package\\package.xml manifest\\package.xml"
-                            if (fileExists('package/destructiveChanges.xml')) {
-                                bat "copy package\\destructiveChanges.xml manifest\\destructiveChanges.xml"
-                            }
-                        }
+                        // Verificar si se generaron archivos
+                        echo "📁 Contenido de manifest después de sgd:"
+                        bat "dir manifest"
                         
-                        if (packageXmlPath && fileExists(packageXmlPath)) {
-                            echo "✅ package.xml generado exitosamente en: ${packageXmlPath}"
-                            echo "📄 Contenido del package.xml generado:"
+                        // Verificar archivos específicos
+                        if (fileExists('manifest\\package.xml')) {
+                            echo "✅ package.xml encontrado"
                             bat "type manifest\\package.xml"
-                            
-                            // También mostrar si hay destructiveChanges
-                            if (fileExists('manifest/destructiveChanges.xml')) {
-                                echo "🗑️ Se generó destructiveChanges.xml:"
-                                bat "type manifest\\destructiveChanges.xml"
-                            }
-                            
-                            // Verificar si el package.xml tiene contenido real
-                            def packageContent = readFile('manifest/package.xml')
-                            if (!packageContent.contains('<types>')) {
-                                echo "⚠️ El package.xml no contiene metadatos (<types>), posiblemente solo cambios en Jenkinsfile"
-                                env.EMPTY_PACKAGE = 'true'
-                            } else {
-                                env.EMPTY_PACKAGE = 'false'
-                            }
-                        } else {
-                            echo "⚠️ No se encontró package.xml generado por SGD"
-                            echo "📋 Listando contenido de directorios:"
-                            bat "dir manifest"
-                            bat "if exist package dir package"
-                            
-                            echo "📄 Creando package.xml vacío para evitar errores..."
-                            bat """
-                                echo ^<?xml version="1.0" encoding="UTF-8"?^> > manifest\\package.xml
-                                echo ^<Package xmlns="http://soap.sforce.com/2006/04/metadata"^> >> manifest\\package.xml
-                                echo     ^<version^>60.0^</version^> >> manifest\\package.xml
-                                echo ^</Package^> >> manifest\\package.xml
-                            """
-                            env.EMPTY_PACKAGE = 'true'
                         }
                         
-                    } catch (Exception e) {
-                        echo "❌ Error generando delta: ${e.getMessage()}"
+                        if (fileExists('manifest\\destructiveChanges.xml')) {
+                            echo "🗑️ destructiveChanges.xml encontrado"
+                            bat "type manifest\\destructiveChanges.xml"
+                        }
                         
-                        // Como fallback, crear un package.xml vacío
-                        echo "📄 Creando package.xml vacío como fallback..."
-                        bat """
-                            echo ^<?xml version="1.0" encoding="UTF-8"?^> > manifest\\package.xml
-                            echo ^<Package xmlns="http://soap.sforce.com/2006/04/metadata"^> >> manifest\\package.xml
-                            echo     ^<version^>60.0^</version^> >> manifest\\package.xml
-                            echo ^</Package^> >> manifest\\package.xml
-                        """
+                        echo "✅ package.xml generado con delta"
+                    } catch (Exception e) {
+                        echo "❌ Error con nueva sintaxis: ${e.getMessage()}"
+                        echo "🔧 Intentando método manual de respaldo..."
+                        createManualPackageXml()
+                    }
+
+                    // Verificar package.xml final
+                    if (fileExists('manifest\\package.xml')) {
+                        echo "📄 Contenido final de package.xml:"
+                        bat "type manifest\\package.xml"
+                        
+                        // Verificar que no esté vacío
+                        def packageContent = readFile('manifest\\package.xml')
+                        if (packageContent.contains('<types>')) {
+                            env.SKIP_VALIDATION = "false"
+                            echo "✅ package.xml contiene metadata para validar"
+                        } else {
+                            env.SKIP_VALIDATION = "true"
+                            echo "⚠️ package.xml está vacío - sin cambios de metadata"
+                        }
+                    } else {
+                        echo "⚠️ No hay cambios de metadata de Salesforce para validar"
+                        echo "✅ Pipeline completado - Sin validación necesaria"
+                        env.SKIP_VALIDATION = "true"
                     }
                 }
             }
         }
 
-        stage('Validar cambios en Salesforce') {
+        stage('Validar en Salesforce') {
+            when {
+                environment name: 'SKIP_VALIDATION', value: 'false'
+            }
             steps {
                 script {
                     updateGitHubStatus('pending', 'Validando metadatos...', 'pr-validation')
                     echo "🔍 Ejecutando validación (checkOnly) en Salesforce..."
 
-                    // Verificar si hay contenido para validar
-                    if (env.EMPTY_PACKAGE == 'false') {
-                        echo "📋 Se encontraron metadatos para validar"
-                        
-                        try {
-                            // Validar con test level apropiado
-                            bat "${SF_CMD} project deploy validate --manifest manifest\\package.xml --test-level RunLocalTests --target-org %SFDX_ALIAS% --verbose"
-                            updateGitHubStatus('success', 'Validación exitosa', 'pr-validation')
-                            echo "✅ Validación completada sin errores"
-                        } catch (Exception e) {
-                            updateGitHubStatus('failure', 'Error en la validación', 'pr-validation')
-                            echo "❌ Validación fallida: ${e.getMessage()}"
-                            error "Validación fallida"
-                        }
-                    } else {
-                        echo "⚠️ No hay metadatos para validar (package.xml vacío)"
-                        updateGitHubStatus('success', 'No hay cambios para validar', 'pr-validation')
-                    }
-                }
-            }
-        }
-
-        stage('Deploy a Salesforce (opcional)') {
-            when {
-                // Solo deployar en branch main/master o cuando sea un merge
-                anyOf {
-                    branch 'main'
-                    branch 'master'
-                    environment name: 'DEPLOY_ENABLED', value: 'true'
-                }
-            }
-            steps {
-                script {
-                    echo "🚀 Ejecutando deploy real a Salesforce..."
-                    
                     try {
-                        // Deploy real (sin --validate-only)
-                        bat "${SF_CMD} project deploy start --manifest manifest\\package.xml --test-level RunLocalTests --target-org %SFDX_ALIAS% --verbose"
-                        echo "✅ Deploy completado exitosamente"
+                        // Ajusta el testLevel según tus necesidades
+                        bat "${SF_CMD} project deploy validate --manifest manifest\\package.xml --test-level RunLocalTests --target-org %SFDX_ALIAS%"
+                        updateGitHubStatus('success', 'Validación exitosa', 'pr-validation')
+                        echo "✅ Validación completada sin errores"
                     } catch (Exception e) {
-                        echo "❌ Deploy fallido: ${e.getMessage()}"
-                        error "Deploy fallido"
+                        updateGitHubStatus('failure', 'Error en la validación', 'pr-validation')
+                        echo "❌ Validación fallida: ${e.getMessage()}"
+                        error "Validación fallida"
                     }
                 }
             }
@@ -193,28 +171,69 @@ pipeline {
             script {
                 // Limpieza
                 bat "if exist auth_url.txt del auth_url.txt"
-                
-                // Mostrar resumen final
-                echo "📊 Resumen de la ejecución:"
-                echo "   - Tag base: ${env.GITHUB_HSU_TAG}"
-                echo "   - Commit HEAD: ${env.GIT_COMMIT}"
-                echo "   - Alias Salesforce: ${env.SFDX_ALIAS}"
-                
                 echo "🧹 Limpieza completada"
             }
         }
-        failure {
-            script {
-                echo "💥 Pipeline falló - revisa los logs anteriores"
-                updateGitHubStatus('failure', 'Pipeline falló', 'pr-validation')
-            }
-        }
-        success {
-            script {
-                echo "🎉 Pipeline completado exitosamente"
-            }
-        }
     }
+}
+
+def createManualPackageXml() {
+    echo "🔧 Creando package.xml manual basado en cambios detectados..."
+    
+    // Obtener lista de archivos cambiados
+    def changedFiles = bat(script: "git diff --name-only ${env.GITHUB_HSU_TAG}..HEAD", returnStdout: true).trim().split('\n')
+    
+    def packageContent = """<?xml version="1.0" encoding="UTF-8"?>
+<Package xmlns="http://soap.sforce.com/2006/04/metadata">
+"""
+    
+    def apexClasses = []
+    def triggers = []
+    def pages = []
+    def components = []
+    
+    // Clasificar archivos por tipo
+    changedFiles.each { file ->
+        if (file.endsWith('.cls') && file.contains('force-app/main/default/classes/')) {
+            def className = file.tokenize('/').last().replace('.cls', '')
+            apexClasses.add(className)
+        } else if (file.endsWith('.trigger') && file.contains('force-app/main/default/triggers/')) {
+            def triggerName = file.tokenize('/').last().replace('.trigger', '')
+            triggers.add(triggerName)
+        }
+        // Agregar más tipos según necesites
+    }
+    
+    // Agregar ApexClass
+    if (apexClasses) {
+        packageContent += """    <types>
+"""
+        apexClasses.each { className ->
+            packageContent += "        <members>${className}</members>\n"
+        }
+        packageContent += """        <name>ApexClass</name>
+    </types>
+"""
+    }
+    
+    // Agregar ApexTrigger
+    if (triggers) {
+        packageContent += """    <types>
+"""
+        triggers.each { triggerName ->
+            packageContent += "        <members>${triggerName}</members>\n"
+        }
+        packageContent += """        <name>ApexTrigger</name>
+    </types>
+"""
+    }
+    
+    packageContent += """    <version>61.0</version>
+</Package>"""
+    
+    // Escribir archivo
+    writeFile file: 'manifest\\package.xml', text: packageContent
+    echo "✅ package.xml manual creado"
 }
 
 def updateGitHubStatus(state, description, context) {

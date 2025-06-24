@@ -28,5 +28,6 @@ public with sharing class HSU_CaseDetail {
             System.debug('Error al obtener expediente: ' + res.getStatusCode() + ' - ' + res.getBody());
             throw new AuraHandledException('Error al obtener expediente. Código: ' + res.getStatusCode());
         }
+        //o0
     }
 }
