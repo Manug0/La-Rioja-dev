@@ -114,19 +114,9 @@ pipeline {
                         
                         echo "✅ package.xml generado con delta"
                     } catch (Exception e) {
-                        echo "❌ Error con nueva sintaxis, probando sintaxis legacy..."
-                        
-                        try {
-                            // Opción 2: Sintaxis legacy como fallback
-                            bat "\"${SF_CMD}\" sgd source delta --from \"${env.GITHUB_HSU_TAG}\" --to HEAD --output manifest --generate-delta"
-                            echo "✅ Delta generado con sintaxis legacy"
-                        } catch (Exception e2) {
-                            echo "❌ Error con ambas sintaxis: ${e2.getMessage()}"
-                            
-                            // Opción 3: Método manual de respaldo
-                            echo "🔧 Intentando método manual de respaldo..."
-                            createManualPackageXml()
-                        }
+                        echo "❌ Error con nueva sintaxis: ${e.getMessage()}"
+                        echo "🔧 Intentando método manual de respaldo..."
+                        createManualPackageXml()
                     }
 
                     // Verificar package.xml final
