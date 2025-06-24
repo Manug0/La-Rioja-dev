@@ -56,7 +56,7 @@ pipeline {
                     
                     // Verificar estructura de directorios
                     echo "📁 Estructura de directorios:"
-                    bat "dir /s /b force-app\\main\\default\\classes\\*.cls | head -10"
+                    bat "dir /s /b force-app\\main\\default\\classes\\*.cls"
                     
                     // Verificar cambios específicos
                     echo "📋 Cambios detectados por git:"
@@ -64,7 +64,20 @@ pipeline {
                     
                     // Verificar tipos de archivo
                     echo "📄 Tipos de archivos modificados:"
-                    bat "git diff --name-only ${env.GITHUB_HSU_TAG}..HEAD | findstr /E \".cls .trigger .page .component .xml\""
+                    def changedFiles = bat(script: "git diff --name-only ${env.GITHUB_HSU_TAG}..HEAD", returnStdout: true).trim()
+                    echo "Archivos cambiados:"
+                    echo changedFiles
+                    
+                    // Filtrar archivos de Salesforce
+                    def sfFiles = []
+                    changedFiles.split('\n').each { file ->
+                        if (file.endsWith('.cls') || file.endsWith('.trigger') || 
+                            file.endsWith('.page') || file.endsWith('.component') || 
+                            file.endsWith('-meta.xml')) {
+                            sfFiles.add(file)
+                        }
+                    }
+                    echo "📄 Archivos de Salesforce modificados: ${sfFiles.join(', ')}"
 
                     // Autenticación
                     echo "🔐 Autenticando con Salesforce..."
