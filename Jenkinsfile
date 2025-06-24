@@ -73,14 +73,20 @@ pipeline {
                     if (fileExists('manifest\\package.xml')) {
                         echo "📄 Contenido final de package.xml:"
                         bat "type manifest\\package.xml"
+                        env.SKIP_VALIDATION = "false"
                     } else {
-                        error "❌ No se generó package.xml en manifest/"
+                        echo "⚠️ No hay cambios de metadata de Salesforce para validar"
+                        echo "✅ Pipeline completado - Sin validación necesaria"
+                        env.SKIP_VALIDATION = "true"
                     }
                 }
             }
         }
 
         stage('Validar en Salesforce') {
+            when {
+                environment name: 'SKIP_VALIDATION', value: 'false'
+            }
             steps {
                 script {
                     updateGitHubStatus('pending', 'Validando metadatos...', 'pr-validation')
