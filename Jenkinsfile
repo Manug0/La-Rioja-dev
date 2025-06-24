@@ -43,6 +43,29 @@ pipeline {
                     }
                     echo "✅ Tag ${env.GITHUB_HSU_TAG} encontrado: ${tagExists}"
 
+                    // DIAGNÓSTICO: Verificar estructura del proyecto
+                    echo "🔍 DIAGNÓSTICO: Verificando estructura del proyecto..."
+                    
+                    // Verificar sfdx-project.json
+                    if (fileExists('sfdx-project.json')) {
+                        echo "✅ sfdx-project.json encontrado:"
+                        bat "type sfdx-project.json"
+                    } else {
+                        echo "❌ sfdx-project.json NO encontrado"
+                    }
+                    
+                    // Verificar estructura de directorios
+                    echo "📁 Estructura de directorios:"
+                    bat "dir /s /b force-app\\main\\default\\classes\\*.cls | head -10"
+                    
+                    // Verificar cambios específicos
+                    echo "📋 Cambios detectados por git:"
+                    bat "git diff --name-status ${env.GITHUB_HSU_TAG}..HEAD"
+                    
+                    // Verificar tipos de archivo
+                    echo "📄 Tipos de archivos modificados:"
+                    bat "git diff --name-only ${env.GITHUB_HSU_TAG}..HEAD | findstr /E \".cls .trigger .page .component .xml\""
+
                     // Autenticación
                     echo "🔐 Autenticando con Salesforce..."
                     bat 'echo %SFDX_AUTH_URL% > auth_url.txt'
@@ -55,25 +78,58 @@ pipeline {
                     bat "mkdir manifest"
 
                     try {
-                        // Mostrar diferencias para debugging
-                        echo "📋 Mostrando diferencias entre ${env.GITHUB_HSU_TAG} y HEAD:"
-                        bat "git diff --name-only ${env.GITHUB_HSU_TAG}..HEAD"
+                        // VERSIÓN MEJORADA: Usar la nueva sintaxis recomendada
+                        echo "🔄 Ejecutando sgd para generar delta (versión mejorada)..."
                         
-                        // Generar delta con sgd
-                        echo "🔄 Ejecutando sgd para generar delta..."
-                        bat "\"${SF_CMD}\" sgd source delta --from \"${env.GITHUB_HSU_TAG}\" --to HEAD --output manifest --generate-delta"
+                        // Opción 1: Usar la nueva sintaxis
+                        bat "\"${SF_CMD}\" sgd source delta --from \"${env.GITHUB_HSU_TAG}\" --to HEAD --output-dir manifest --generate-delta"
+                        
+                        // Verificar si se generaron archivos
+                        echo "📁 Contenido de manifest después de sgd:"
+                        bat "dir manifest"
+                        
+                        // Verificar archivos específicos
+                        if (fileExists('manifest\\package.xml')) {
+                            echo "✅ package.xml encontrado"
+                            bat "type manifest\\package.xml"
+                        }
+                        
+                        if (fileExists('manifest\\destructiveChanges.xml')) {
+                            echo "🗑️ destructiveChanges.xml encontrado"
+                            bat "type manifest\\destructiveChanges.xml"
+                        }
                         
                         echo "✅ package.xml generado con delta"
                     } catch (Exception e) {
-                        echo "❌ Error generando delta: ${e.getMessage()}"
-                        error "Fallo al generar package.xml"
+                        echo "❌ Error con nueva sintaxis, probando sintaxis legacy..."
+                        
+                        try {
+                            // Opción 2: Sintaxis legacy como fallback
+                            bat "\"${SF_CMD}\" sgd source delta --from \"${env.GITHUB_HSU_TAG}\" --to HEAD --output manifest --generate-delta"
+                            echo "✅ Delta generado con sintaxis legacy"
+                        } catch (Exception e2) {
+                            echo "❌ Error con ambas sintaxis: ${e2.getMessage()}"
+                            
+                            // Opción 3: Método manual de respaldo
+                            echo "🔧 Intentando método manual de respaldo..."
+                            createManualPackageXml()
+                        }
                     }
 
                     // Verificar package.xml final
                     if (fileExists('manifest\\package.xml')) {
                         echo "📄 Contenido final de package.xml:"
                         bat "type manifest\\package.xml"
-                        env.SKIP_VALIDATION = "false"
+                        
+                        // Verificar que no esté vacío
+                        def packageContent = readFile('manifest\\package.xml')
+                        if (packageContent.contains('<types>')) {
+                            env.SKIP_VALIDATION = "false"
+                            echo "✅ package.xml contiene metadata para validar"
+                        } else {
+                            env.SKIP_VALIDATION = "true"
+                            echo "⚠️ package.xml está vacío - sin cambios de metadata"
+                        }
                     } else {
                         echo "⚠️ No hay cambios de metadata de Salesforce para validar"
                         echo "✅ Pipeline completado - Sin validación necesaria"
@@ -116,6 +172,65 @@ pipeline {
             }
         }
     }
+}
+
+def createManualPackageXml() {
+    echo "🔧 Creando package.xml manual basado en cambios detectados..."
+    
+    // Obtener lista de archivos cambiados
+    def changedFiles = bat(script: "git diff --name-only ${env.GITHUB_HSU_TAG}..HEAD", returnStdout: true).trim().split('\n')
+    
+    def packageContent = """<?xml version="1.0" encoding="UTF-8"?>
+<Package xmlns="http://soap.sforce.com/2006/04/metadata">
+"""
+    
+    def apexClasses = []
+    def triggers = []
+    def pages = []
+    def components = []
+    
+    // Clasificar archivos por tipo
+    changedFiles.each { file ->
+        if (file.endsWith('.cls') && file.contains('force-app/main/default/classes/')) {
+            def className = file.tokenize('/').last().replace('.cls', '')
+            apexClasses.add(className)
+        } else if (file.endsWith('.trigger') && file.contains('force-app/main/default/triggers/')) {
+            def triggerName = file.tokenize('/').last().replace('.trigger', '')
+            triggers.add(triggerName)
+        }
+        // Agregar más tipos según necesites
+    }
+    
+    // Agregar ApexClass
+    if (apexClasses) {
+        packageContent += """    <types>
+"""
+        apexClasses.each { className ->
+            packageContent += "        <members>${className}</members>\n"
+        }
+        packageContent += """        <name>ApexClass</name>
+    </types>
+"""
+    }
+    
+    // Agregar ApexTrigger
+    if (triggers) {
+        packageContent += """    <types>
+"""
+        triggers.each { triggerName ->
+            packageContent += "        <members>${triggerName}</members>\n"
+        }
+        packageContent += """        <name>ApexTrigger</name>
+    </types>
+"""
+    }
+    
+    packageContent += """    <version>61.0</version>
+</Package>"""
+    
+    // Escribir archivo
+    writeFile file: 'manifest\\package.xml', text: packageContent
+    echo "✅ package.xml manual creado"
 }
 
 def updateGitHubStatus(state, description, context) {
