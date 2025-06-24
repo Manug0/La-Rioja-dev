@@ -12,10 +12,19 @@ pipeline {
         stage('Checkout') {
             steps {
                 checkout scm
-                // Forzar fetch completo de tags y historial
-                bat "git fetch --unshallow || echo 'Repositorio ya completo'"
-                bat "git fetch --tags --force"
                 script {
+                    // Verificar si el repo está shallow antes de hacer unshallow
+                    def isShallow = bat(script: "git rev-parse --is-shallow-repository", returnStatus: true)
+                    if (isShallow == 0) {
+                        echo "📥 Repositorio shallow detectado, obteniendo historial completo..."
+                        bat "git fetch --unshallow"
+                    } else {
+                        echo "📥 Repositorio ya completo"
+                    }
+                    
+                    // Fetch de tags
+                    bat "git fetch --tags --force"
+                    
                     updateGitHubStatus('pending', 'Iniciando validación...', 'pr-validation')
                     echo "🔄 Iniciando validación de PR/Push..."
                 }
@@ -26,9 +35,6 @@ pipeline {
             steps {
                 script {
                     echo "📦 Creando package.xml de validación usando dif entre ${env.GITHUB_HSU_TAG} y HEAD..."
-
-                    // Ya no necesitas esto porque se hizo en Checkout
-                    // bat "git fetch --tags"
 
                     // Verificar que el tag existe antes de continuar
                     def tagExists = bat(script: "git tag -l HSU_START", returnStdout: true).trim()
