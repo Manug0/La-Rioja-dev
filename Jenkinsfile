@@ -12,6 +12,9 @@ pipeline {
         stage('Checkout') {
             steps {
                 checkout scm
+                // Forzar fetch completo de tags y historial
+                bat "git fetch --unshallow || echo 'Repositorio ya completo'"
+                bat "git fetch --tags --force"
                 script {
                     updateGitHubStatus('pending', 'Iniciando validación...', 'pr-validation')
                     echo "🔄 Iniciando validación de PR/Push..."
@@ -24,8 +27,15 @@ pipeline {
                 script {
                     echo "📦 Creando package.xml de validación usando dif entre ${env.GITHUB_HSU_TAG} y HEAD..."
 
-                    // Asegúrate de tener los tags locales
-                    bat "git fetch --tags"
+                    // Ya no necesitas esto porque se hizo en Checkout
+                    // bat "git fetch --tags"
+
+                    // Verificar que el tag existe antes de continuar
+                    def tagExists = bat(script: "git tag -l HSU_START", returnStdout: true).trim()
+                    if (!tagExists) {
+                        error "❌ Tag HSU_START no encontrado en el repositorio"
+                    }
+                    echo "✅ Tag HSU_START encontrado: ${tagExists}"
 
                     // Autenticación
                     echo "🔐 Autenticando con Salesforce..."
@@ -36,7 +46,6 @@ pipeline {
                     // Limpiar y crear carpetas
                     bat "if exist package rmdir /s /q package"
                     bat "if exist manifest rmdir /s /q manifest"
-                    bat "mkdir package"
                     bat "mkdir manifest"
 
                     try {
@@ -44,42 +53,14 @@ pipeline {
                         echo "📋 Mostrando diferencias entre ${env.GITHUB_HSU_TAG} y HEAD:"
                         bat "git diff --name-only ${env.GITHUB_HSU_TAG}..HEAD"
                         
-                        // Generar delta con sgd usando --output-dir (no --output que está deprecated)
+                        // Generar delta con sgd
                         echo "🔄 Ejecutando sgd para generar delta..."
-                        bat "\"${SF_CMD}\" sgd source delta --from \"${env.GITHUB_HSU_TAG}\" --to HEAD --output-dir manifest --generate-delta"
-                        
-                        // SGD puede generar el package.xml en diferentes ubicaciones, verificar ambas
-                        def packageXmlPath = ''
-                        if (fileExists('manifest/package.xml')) {
-                            packageXmlPath = 'manifest/package.xml'
-                            echo "✅ package.xml encontrado en manifest/"
-                        } else if (fileExists('package/package.xml')) {
-                            packageXmlPath = 'package/package.xml'
-                            echo "✅ package.xml encontrado en package/, moviendo a manifest/"
-                            // Mover a manifest para consistencia
-                            bat "copy package\\package.xml manifest\\package.xml"
-                            if (fileExists('package/destructiveChanges.xml')) {
-                                bat "copy package\\destructiveChanges.xml manifest\\destructiveChanges.xml"
-                            }
-                        }
-                        
-                        if (packageXmlPath && fileExists('manifest/package.xml')) {
-                            echo "✅ package.xml generado exitosamente"
-                            echo "📄 Contenido del package.xml generado:"
-                            bat "type manifest\\package.xml"
-                            
-                            // También mostrar si hay destructiveChanges
-                            if (fileExists('manifest/destructiveChanges.xml')) {
-                                echo "🗑️ Se generó destructiveChanges.xml:"
-                                bat "type manifest\\destructiveChanges.xml"
-                            }
-                        } else {
-                            echo "❌ No se encontró package.xml generado por SGD"
-                        }
+                        bat "\"${SF_CMD}\" sgd source delta --from \"${env.GITHUB_HSU_TAG}\" --to HEAD --output manifest --generate-delta"
                         
                         echo "✅ package.xml generado con delta"
                     } catch (Exception e) {
                         echo "❌ Error generando delta: ${e.getMessage()}"
+                        error "Fallo al generar package.xml"
                     }
 
                     // Verificar package.xml final
@@ -87,7 +68,7 @@ pipeline {
                         echo "📄 Contenido final de package.xml:"
                         bat "type manifest\\package.xml"
                     } else {
-                        echo "❌ No se generó package.xml"
+                        error "❌ No se generó package.xml en manifest/"
                     }
                 }
             }
