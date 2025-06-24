@@ -14,8 +14,8 @@ pipeline {
                 checkout scm
                 script {
                     // Verificar si el repo está shallow antes de hacer unshallow
-                    def isShallow = bat(script: "git rev-parse --is-shallow-repository", returnStatus: true)
-                    if (isShallow == 0) {
+                    def isShallow = bat(script: "git rev-parse --is-shallow-repository", returnStdout: true).trim()
+                    if (isShallow == 'true') {
                         echo "📥 Repositorio shallow detectado, obteniendo historial completo..."
                         bat "git fetch --unshallow"
                     } else {
@@ -37,11 +37,11 @@ pipeline {
                     echo "📦 Creando package.xml de validación usando dif entre ${env.GITHUB_HSU_TAG} y HEAD..."
 
                     // Verificar que el tag existe antes de continuar
-                    def tagExists = bat(script: "git tag -l HSU_START", returnStdout: true).trim()
+                    def tagExists = bat(script: "git tag -l ${env.GITHUB_HSU_TAG}", returnStdout: true).trim()
                     if (!tagExists) {
-                        error "❌ Tag HSU_START no encontrado en el repositorio"
+                        error "❌ Tag ${env.GITHUB_HSU_TAG} no encontrado en el repositorio"
                     }
-                    echo "✅ Tag HSU_START encontrado: ${tagExists}"
+                    echo "✅ Tag ${env.GITHUB_HSU_TAG} encontrado: ${tagExists}"
 
                     // Autenticación
                     echo "🔐 Autenticando con Salesforce..."
