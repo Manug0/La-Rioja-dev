@@ -56,7 +56,7 @@ pipeline {
                     
                     // Verificar estructura de directorios
                     echo "📁 Estructura de directorios:"
-                    bat "dir /s /b force-app\\main\\default\\classes\\*.cls"
+                    bat "dir /s /b force-app\\main\\default"
                     
                     // Verificar cambios específicos
                     echo "📋 Cambios detectados por git:"
