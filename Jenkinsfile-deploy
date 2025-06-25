@@ -1,5 +1,5 @@
 pipeline {
-    agent {label 'salesforce'}
+    agent {label 'windows'}
     environment {
         GITHUB_BRANCH = 'main'
         GITHUB_TAG = 'HSU_START'
