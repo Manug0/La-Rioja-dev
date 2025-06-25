@@ -1,6 +1,5 @@
 pipeline {
-    // agent { label 'windows' }
-
+    agent { label 'salesforce' }
     environment {
         GITHUB_TOKEN = credentials('github-pat') 
         GITHUB_REPO = 'Manug0/La-Rioja-dev'
@@ -17,7 +16,6 @@ pipeline {
 
         LAST_COMMIT_SHA = ''
     }
-
     stages {
         stage('Inicio') {
             steps {
@@ -27,7 +25,6 @@ pipeline {
                 }
             }
         }
-
         stage('Obtener último commit desde GitHub') {
             steps {
                 script {
@@ -44,7 +41,6 @@ pipeline {
                 }
             }
         }
-
         stage('Instalar dependencias') {
             steps {
                 script {
@@ -55,7 +51,6 @@ pipeline {
                 }
             }
         }
-
         stage('Autenticarse en Salesforce') {
             steps {
                 script {
@@ -66,7 +61,6 @@ pipeline {
                 }
             }
         }
-
         stage('Delta y Validación') {
             steps {
                 script {
@@ -94,7 +88,6 @@ pipeline {
             }
         }
     }
-
     post {
         success {
             script {
@@ -102,7 +95,6 @@ pipeline {
                 githubCommentPR("✅ Validación completada con éxito. [Ver en Salesforce](${env.SF_DEPLOYMENT_URL})")
             }
         }
-
         failure {
             script {
                 githubCommitStatus('failure', 'Falló la validación ❌')
