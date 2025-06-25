@@ -1,369 +1,122 @@
 pipeline {
-    agent any
+    agent {label 'salesforce'}
     environment {
-        SFDX_AUTH_URL = credentials('SFDX_AUTH_URL_PRE')
-        GITHUB_HSU_TAG = 'HSU_START'
-        SFDX_ALIAS = 'pre'
-        SF_CMD = 'C:\\Users\\Manu\\AppData\\Local\\sf\\client\\2.92.7-df40848\\bin\\sf.cmd'
-        GITHUB_TOKEN = credentials('github-pat')
+        GITHUB_BRANCH = 'main'
+        GITHUB_TAG = 'HSU_START'
+        GITHUB_BASE_API_URL = 'https://api.github.com'
+        GITHUB_REPO = 'Manug0/La-Rioja-dev'
+        GITHUB_AUTH_HEADER = ''
+
+        GITHUB_TOKEN = ''
+
+        LAST_COMMIT_SHA = ''
+
+        AUTH_FILE_PATH = 'C:\\temp\\sfdx-auth.json'
+
+        SF_DISABLE_TELEMETRY = 'true'
     }
 
     stages {
-        stage('Checkout') {
+        stage('Leer datos desde GitHub') {
             steps {
-                checkout scm
                 script {
-                    // Verificar si el repo está shallow antes de hacer unshallow
-                    def isShallow = bat(script: "git rev-parse --is-shallow-repository", returnStdout: true).trim()
-                    if (isShallow == 'true') {
-                        echo "📥 Repositorio shallow detectado, obteniendo historial completo..."
-                        bat "git fetch --unshallow"
-                    } else {
-                        echo "📥 Repositorio ya completo"
+                    withCredentials([string(credentialsId: 'GITHUB_TOKEN', variable: 'TOKEN')]) {
+                        GITHUB_TOKEN = TOKEN
+                        GITHUB_AUTH_HEADER = "Authorization: Bearer ${GITHUB_TOKEN}"
                     }
-                    
-                    // Fetch de tags
-                    bat "git fetch --tags --force"
-                    
-                    updateGitHubStatus('pending', 'Iniciando Deploy...', 'production-deploy')
-                    echo "🚀 Iniciando pipeline de Deploy a Producción"
+
+                    def apiURL = "https://api.github.com/repos/${GITHUB_REPO}/branches/${GITHUB_BRANCH}"
+                    def command = "curl -s -H \"${GITHUB_AUTH_HEADER}\" \"${apiURL}\" > branch_info.json"
+                    bat command
+
+                    def branchInfo = readJSON file: 'branch_info.json'
+                    LAST_COMMIT_SHA = branchInfo.commit.sha
+
+                    echo "Último commit en '${GITHUB_BRANCH}': ${LAST_COMMIT_SHA}"
                 }
             }
         }
 
-        stage('Generar Package con Delta') {
+        stage('Instalar dependencias') {
             steps {
                 script {
-                    echo "📦 Generando package.xml con cambios desde ${env.GITHUB_HSU_TAG} a HEAD..."
-
-                    // Verificar que el tag existe
-                    def tagExists = bat(script: "git tag -l ${env.GITHUB_HSU_TAG}", returnStdout: true).trim()
-                    if (!tagExists) {
-                        error "❌ Tag ${env.GITHUB_HSU_TAG} no encontrado en el repositorio"
+                    withCredentials([file(credentialsId: 'SFDX_AUTH_URL_PRE', variable: 'SFDC_AUTH_FILE')]) {
+                        bat "type %SFDC_AUTH_FILE%"
+                        bat "copy %SFDC_AUTH_FILE% ${AUTH_FILE_PATH}"
                     }
-                    echo "✅ Tag ${env.GITHUB_HSU_TAG} encontrado"
+                    bat "sf org login sfdx-url --sfdx-url-file ${AUTH_FILE_PATH} --set-default"
+                }
 
-                    // Mostrar cambios para debugging
-                    echo "📋 Cambios que se van a desplegar:"
-                    bat "git diff --name-only ${env.GITHUB_HSU_TAG}..HEAD"
+                bat '''
+                    sf -v
+                    sf config set disable-telemetry true --global
+                    echo y | sf plugins install sfdx-hardis
+                    echo y | sf plugins install sfdx-git-delta
+                '''
 
-                    // Autenticación
-                    echo "🔐 Autenticando con Salesforce..."
-                    bat 'echo %SFDX_AUTH_URL% > auth_url.txt'
-                    bat "${SF_CMD} org login sfdx-url --sfdx-url-file auth_url.txt --alias %SFDX_ALIAS%"
-                    echo "✅ Autenticación exitosa"
-                    
-                    // Limpiar y crear carpeta package
-                    bat "if exist package rmdir /s /q package"
-                    bat "mkdir package"
+                echo "Instalamos librerías Node.js necesarias"
+                bat 'npm install yaml fs'
+            }
+        }
 
-                    try {
-                        // Generar delta con sgd usando nueva sintaxis
-                        echo "🔄 Generando delta con SGD..."
-                        bat "\"${SF_CMD}\" sgd source delta --from \"${env.GITHUB_HSU_TAG}\" --to HEAD --output-dir package --generate-delta"
-                        echo "✅ Delta generado con SGD"
-                    } catch (Exception e) {
-                        echo "❌ Error con SGD: ${e.getMessage()}"
-                        echo "🔧 Creando package.xml manual..."
-                        createManualPackageXml()
-                    }
+        stage("Clonar proyecto desde GitHub") {
+            steps {
+                bat "git clone --branch ${GITHUB_BRANCH} https://github.com/${GITHUB_REPO}.git"
+            }
+        }
 
-                    // Verificar package.xml
-                    if (fileExists('package\\package.xml')) {
-                        echo "📄 Contenido de package.xml:"
-                        bat "type package\\package.xml"
-                        
-                        // Verificar que tenga contenido válido
-                        def packageContent = readFile('package\\package.xml')
-                        if (packageContent.contains('<types>')) {
-                            echo "✅ Package.xml válido para deploy"
-                            env.HAS_CHANGES = "true"
-                        } else {
-                            echo "⚠️ Package.xml vacío - no hay cambios para desplegar"
-                            env.HAS_CHANGES = "false"
-                        }
-                    } else {
-                        echo "❌ No se pudo generar package.xml"
-                        env.HAS_CHANGES = "false"
-                    }
+        stage("Crear package.xml") {
+            steps {
+                dir('La-Rioja-dev') {
+                    bat "dir"
+                    bat "sf.cmd sgd source delta --from ${GITHUB_TAG} --to ${LAST_COMMIT_SHA} --output ."
+                    bat "dir package"
+                    bat "type package\\package.xml"
                 }
             }
         }
 
-        stage('Desplegar en Producción') {
-            when {
-                environment name: 'HAS_CHANGES', value: 'true'
-            }
+        stage("Validar package.xml y ejecutar pruebas") {
             steps {
-                script {
-                    updateGitHubStatus('pending', 'Desplegando en Producción...', 'production-deploy')
-                    echo "🚀 Iniciando despliegue en Producción..."
-
-                    try {
-                        // Deploy con tests
-                        echo "🔄 Ejecutando deploy con validación de tests..."
-                        bat "${SF_CMD} project deploy start --manifest package\\package.xml --target-org %SFDX_ALIAS% --test-level RunLocalTests --wait 30"
-                        
-                        updateGitHubStatus('success', 'Deploy exitoso', 'production-deploy')
-                        echo "✅ Deploy completado exitosamente"
-                        
-                        // Actualizar tag después del deploy exitoso
-                        echo "🏷️ Actualizando tag ${env.GITHUB_HSU_TAG} al commit actual..."
-                        bat "git tag -d ${env.GITHUB_HSU_TAG}"
-                        bat "git tag ${env.GITHUB_HSU_TAG} HEAD"
-                        bat "git push origin ${env.GITHUB_HSU_TAG} --force"
-                        echo "✅ Tag actualizado exitosamente"
-                        
-                    } catch (Exception e) {
-                        updateGitHubStatus('failure', 'Deploy falló en Salesforce', 'production-deploy')
-                        echo "❌ Deploy falló: ${e.getMessage()}"
-                        
-                        // Intentar obtener más detalles del error
-                        echo "🔍 Obteniendo detalles del último deploy..."
-                        try {
-                            bat "${SF_CMD} project deploy report --target-org %SFDX_ALIAS%"
-                        } catch (Exception reportError) {
-                            echo "⚠️ No se pudo obtener reporte detallado: ${reportError.getMessage()}"
-                        }
-                        
-                        error "Deploy falló"
-                    }
-                }
-            }
-        }
-
-        stage('Sin Cambios') {
-            when {
-                environment name: 'HAS_CHANGES', value: 'false'
-            }
-            steps {
-                script {
-                    updateGitHubStatus('success', 'No hay cambios para desplegar', 'production-deploy')
-                    echo "✅ Pipeline completado - No hay cambios de metadata para desplegar"
+                dir('La-Rioja-dev') {
+                    bat "git switch ${GITHUB_BRANCH}"
+                    def testList = bat(script: "node scripts\\utilities\\readTestFile.js", returnStdout: true).trim()
+                    bat "sf project deploy start --manifest package\\package.xml --test-level RunSpecifiedTests --tests ${testList}"
                 }
             }
         }
     }
-
     post {
-        always {
-            script {
-                // Limpieza
-                bat "if exist auth_url.txt del auth_url.txt"
-                echo "🧹 Limpieza finalizada"
+    success {
+        script {
+            try {
+                def statusCommand = """
+                    curl -X POST https://api.github.com/repos/${GITHUB_REPO}/statuses/${LAST_COMMIT_SHA} ^
+                    -H "Authorization: Bearer ${GITHUB_TOKEN}" ^
+                    -H "Content-Type: application/json" ^
+                    -d "{\\"state\\": \\"success\\", \\"context\\": \\"Jenkins CI\\", \\"description\\": \\"Build passed\\"}"
+                """
+                bat statusCommand
+            } catch (Exception ex) {
+                echo "Error al actualizar estado del commit como success: ${ex.getMessage()}"
             }
         }
-        failure {
-            script {
-                echo "❌ Pipeline falló"
-                updateGitHubStatus('failure', 'Pipeline falló', 'production-deploy')
+    }
+    failure {
+        script {
+            try {
+                def statusCommand = """
+                    curl -X POST https://api.github.com/repos/${GITHUB_REPO}/statuses/${LAST_COMMIT_SHA} ^
+                    -H "Authorization: Bearer ${GITHUB_TOKEN}" ^
+                    -H "Content-Type: application/json" ^
+                    -d "{\\"state\\": \\"failure\\", \\"context\\": \\"Jenkins CI\\", \\"description\\": \\"Build failed\\"}"
+                """
+                bat statusCommand
+            } catch (Exception ex) {
+                echo "Error al actualizar estado del commit como failure: ${ex.getMessage()}"
             }
         }
     }
 }
 
-def createManualPackageXml() {
-    echo "🔧 Creando package.xml manual para deploy..."
-    
-    // Obtener lista de archivos cambiados
-    def changedFiles = bat(script: "git diff --name-only ${env.GITHUB_HSU_TAG}..HEAD", returnStdout: true).trim().split('\n')
-    
-    def packageContent = """<?xml version="1.0" encoding="UTF-8"?>
-<Package xmlns="http://soap.sforce.com/2006/04/metadata">
-"""
-    
-    def apexClasses = []
-    def triggers = []
-    def flows = []
-    def customObjects = []
-    def customFields = []
-    def layouts = []
-    def profiles = []
-    def permissionSets = []
-    def lwcComponents = []
-    def auraComponents = []
-    
-    // Clasificar archivos por tipo
-    changedFiles.each { file ->
-        if (file.trim()) {
-            echo "🔍 Analizando archivo: ${file}"
-            
-            // Apex Classes
-            if (file.endsWith('.cls') && file.contains('force-app/main/default/classes/')) {
-                def className = file.tokenize('/').last().replace('.cls', '')
-                apexClasses.add(className)
-                echo "   ✅ Clase Apex: ${className}"
-            }
-            // Triggers
-            else if (file.endsWith('.trigger') && file.contains('force-app/main/default/triggers/')) {
-                def triggerName = file.tokenize('/').last().replace('.trigger', '')
-                triggers.add(triggerName)
-                echo "   ✅ Trigger: ${triggerName}"
-            }
-            // Flows
-            else if (file.endsWith('.flow-meta.xml') && file.contains('force-app/main/default/flows/')) {
-                def flowName = file.tokenize('/').last().replace('.flow-meta.xml', '')
-                flows.add(flowName)
-                echo "   ✅ Flow: ${flowName}"
-            }
-            // Custom Objects
-            else if (file.endsWith('.object-meta.xml') && file.contains('force-app/main/default/objects/')) {
-                def objectName = file.tokenize('/').last().replace('.object-meta.xml', '')
-                customObjects.add(objectName)
-                echo "   ✅ Custom Object: ${objectName}"
-            }
-            // Custom Fields
-            else if (file.endsWith('.field-meta.xml') && file.contains('force-app/main/default/objects/')) {
-                def parts = file.split('/')
-                def objectName = parts[parts.length - 3] // Nombre del objeto
-                def fieldName = parts[parts.length - 1].replace('.field-meta.xml', '')
-                customFields.add("${objectName}.${fieldName}")
-                echo "   ✅ Custom Field: ${objectName}.${fieldName}"
-            }
-            // Layouts
-            else if (file.endsWith('.layout-meta.xml') && file.contains('force-app/main/default/layouts/')) {
-                def layoutName = file.tokenize('/').last().replace('.layout-meta.xml', '')
-                layouts.add(layoutName)
-                echo "   ✅ Layout: ${layoutName}"
-            }
-            // Profiles
-            else if (file.endsWith('.profile-meta.xml') && file.contains('force-app/main/default/profiles/')) {
-                def profileName = file.tokenize('/').last().replace('.profile-meta.xml', '')
-                profiles.add(profileName)
-                echo "   ✅ Profile: ${profileName}"
-            }
-            // Permission Sets
-            else if (file.endsWith('.permissionset-meta.xml') && file.contains('force-app/main/default/permissionsets/')) {
-                def permSetName = file.tokenize('/').last().replace('.permissionset-meta.xml', '')
-                permissionSets.add(permSetName)
-                echo "   ✅ Permission Set: ${permSetName}"
-            }
-            // LWC Components
-            else if (file.contains('force-app/main/default/lwc/') && file.endsWith('.js')) {
-                def lwcName = file.split('/lwc/')[1].split('/')[0]
-                if (!lwcComponents.contains(lwcName)) {
-                    lwcComponents.add(lwcName)
-                    echo "   ✅ LWC Component: ${lwcName}"
-                }
-            }
-            // Aura Components
-            else if (file.contains('force-app/main/default/aura/') && file.endsWith('.cmp')) {
-                def auraName = file.split('/aura/')[1].split('/')[0]
-                if (!auraComponents.contains(auraName)) {
-                    auraComponents.add(auraName)
-                    echo "   ✅ Aura Component: ${auraName}"
-                }
-            }
-        }
-    }
-    
-    echo "📊 Resumen de componentes para deploy:"
-    echo "   - Clases Apex: ${apexClasses.size()}"
-    echo "   - Triggers: ${triggers.size()}"
-    echo "   - Flows: ${flows.size()}"
-    echo "   - Custom Objects: ${customObjects.size()}"
-    echo "   - Custom Fields: ${customFields.size()}"
-    echo "   - Layouts: ${layouts.size()}"
-    echo "   - Profiles: ${profiles.size()}"
-    echo "   - Permission Sets: ${permissionSets.size()}"
-    echo "   - LWC Components: ${lwcComponents.size()}"
-    echo "   - Aura Components: ${auraComponents.size()}"
-    
-    // Generar XML para cada tipo
-    if (apexClasses) {
-        packageContent += generatePackageType('ApexClass', apexClasses)
-    }
-    if (triggers) {
-        packageContent += generatePackageType('ApexTrigger', triggers)
-    }
-    if (flows) {
-        packageContent += generatePackageType('Flow', flows)
-    }
-    if (customObjects) {
-        packageContent += generatePackageType('CustomObject', customObjects)
-    }
-    if (customFields) {
-        packageContent += generatePackageType('CustomField', customFields)
-    }
-    if (layouts) {
-        packageContent += generatePackageType('Layout', layouts)
-    }
-    if (profiles) {
-        packageContent += generatePackageType('Profile', profiles)
-    }
-    if (permissionSets) {
-        packageContent += generatePackageType('PermissionSet', permissionSets)
-    }
-    if (lwcComponents) {
-        packageContent += generatePackageType('LightningComponentBundle', lwcComponents)
-    }
-    if (auraComponents) {
-        packageContent += generatePackageType('AuraDefinitionBundle', auraComponents)
-    }
-    
-    packageContent += """    <version>63.0</version>
-</Package>"""
-    
-    // Solo escribir si hay contenido
-    def totalComponents = apexClasses.size() + triggers.size() + flows.size() + customObjects.size() + 
-                         customFields.size() + layouts.size() + profiles.size() + permissionSets.size() + 
-                         lwcComponents.size() + auraComponents.size()
-    
-    if (totalComponents > 0) {
-        writeFile file: 'package\\package.xml', text: packageContent
-        echo "✅ Package.xml manual creado con ${totalComponents} componentes"
-        echo "📄 Contenido del package.xml:"
-        echo packageContent
-    } else {
-        echo "⚠️ No se encontraron componentes de Salesforce para el package.xml"
-    }
-}
-
-def generatePackageType(metadataType, members) {
-    def content = """    <types>
-"""
-    members.each { member ->
-        content += "        <members>${member}</members>\n"
-    }
-    content += """        <n>${metadataType}</n>
-    </types>
-"""
-    return content
-}
-
-def updateGitHubStatus(state, description, context) {
-    try {
-        def repoUrl = scm.getUserRemoteConfigs()[0].getUrl()
-        def repoName = repoUrl.tokenize('/').last().replace('.git', '')
-        def repoOwner = repoUrl.tokenize('/')[-2]
-        def commitSha = env.GIT_COMMIT
-        def targetUrl = "${BUILD_URL}console"
-
-        def payload = [
-            state       : state,
-            target_url  : targetUrl,
-            description : description,
-            context     : "jenkins/${context}"
-        ]
-
-        def jsonPayload = groovy.json.JsonOutput.toJson(payload)
-
-        withCredentials([usernamePassword(credentialsId: 'github-pat', usernameVariable: 'GH_USER', passwordVariable: 'GH_TOKEN')]) {
-            httpRequest(
-                acceptType: 'APPLICATION_JSON',
-                contentType: 'APPLICATION_JSON',
-                httpMode: 'POST',
-                requestBody: jsonPayload,
-                url: "https://api.github.com/repos/${repoOwner}/${repoName}/statuses/${commitSha}",
-                customHeaders: [
-                    [name: 'Authorization', value: "token ${GH_TOKEN}"],
-                    [name: 'User-Agent', value: 'Jenkins-Pipeline']
-                ]
-            )
-        }
-
-        echo "✅ GitHub status actualizado: ${state} - ${description}"
-    } catch (Exception e) {
-        echo "⚠️ Error actualizando GitHub status: ${e.getMessage()}"
-    }
 }
