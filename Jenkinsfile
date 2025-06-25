@@ -114,15 +114,17 @@ def githubCommitStatus(String state, String description) {
     """
     def url = "https://api.github.com/repos/${env.GITHUB_REPO}/statuses/${env.GITHUB_SHA}"
 
-    httpRequest(
-        acceptType: 'APPLICATION_JSON',
-        contentType: 'APPLICATION_JSON',
-        customHeaders: [[name: 'Authorization', value: "token ${env.GITHUB_TOKEN}"]],
-        httpMode: 'POST',
-        requestBody: body,
-        url: url,
-        validResponseCodes: '200:299'
-    )
+    withCredentials([string(credentialsId: 'github-pat', variable: 'GITHUB_TOKEN')]) {
+        httpRequest(
+            acceptType: 'APPLICATION_JSON',
+            contentType: 'APPLICATION_JSON',
+            customHeaders: [[name: 'Authorization', value: "token ${GITHUB_TOKEN}"]],
+            httpMode: 'POST',
+            requestBody: body,
+            url: url,
+            validResponseCodes: '200:299'
+        )
+    }
 }
 
 def githubCommentPR(String message) {
