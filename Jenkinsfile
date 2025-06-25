@@ -5,8 +5,8 @@ pipeline {
         GITHUB_TOKEN = credentials('github-pat') 
         GITHUB_REPO = 'Manug0/La-Rioja-dev'
         GITHUB_BRANCH = 'dev'
-        GITHUB_PR_NUMBER = env.CHANGE_ID
-        GITHUB_SHA = env.GIT_COMMIT
+        GITHUB_PR_NUMBER = 'env.CHANGE_ID'
+        GITHUB_SHA = 'env.GIT_COMMIT'
 
         AUTH_FILE_PATH = 'C:\\tmp\\sfdx-auth.json'
         SF_DEPLOYMENT_URL = ''
