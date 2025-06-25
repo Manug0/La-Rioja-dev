@@ -1,16 +1,17 @@
 pipeline {
-    agent { label 'windows' }
+    // agent { label 'windows' }
 
     environment {
         GITHUB_TOKEN = credentials('github-pat') 
         GITHUB_REPO = 'Manug0/La-Rioja-dev'
-        GITHUB_BRANCH = 'dev'
+        GITHUB_BRANCH = 'main'
         GITHUB_PR_NUMBER = 'env.CHANGE_ID'
         GITHUB_SHA = 'env.GIT_COMMIT'
 
         AUTH_FILE_PATH = 'C:\\tmp\\sfdx-auth.json'
         SF_DEPLOYMENT_URL = ''
         SF_DEPLOYMENT_STATUS = ''
+        ERROR_MESSAGE = 'XX'
         SF_DISABLE_TELEMETRY = 'true'
         GITHUB_TAG = 'HSU_START'
 
