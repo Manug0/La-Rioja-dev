@@ -21,8 +21,8 @@ pipeline {
             steps {
                 script {
                     withCredentials([string(credentialsId: 'GITHUB_TOKEN', variable: 'TOKEN')]) {
-                        GITHUB_TOKEN = TOKEN
-                        GITHUB_AUTH_HEADER = "Authorization: Bearer ${GITHUB_TOKEN}"
+                        env.GITHUB_TOKEN = TOKEN
+                        env.GITHUB_AUTH_HEADER = "Authorization: Bearer ${env.GITHUB_TOKEN}"
                     }
 
                     def apiURL = "https://api.github.com/repos/${GITHUB_REPO}/branches/${GITHUB_BRANCH}"
@@ -30,9 +30,9 @@ pipeline {
                     bat command
 
                     def branchInfo = readJSON file: 'branch_info.json'
-                    LAST_COMMIT_SHA = branchInfo.commit.sha
+                    env.LAST_COMMIT_SHA = branchInfo.commit.sha
 
-                    echo "Último commit en '${GITHUB_BRANCH}': ${LAST_COMMIT_SHA}"
+                    echo "Último commit en '${GITHUB_BRANCH}': ${env.LAST_COMMIT_SHA}"
                 }
             }
         }
@@ -61,7 +61,7 @@ pipeline {
 
         stage("Clonar proyecto desde GitHub") {
             steps {
-                bat "git clone --branch ${GITHUB_BRANCH} https://github.com/${GITHUB_REPO}.git"
+                checkout scm
             }
         }
 
@@ -90,13 +90,23 @@ pipeline {
     success {
         script {
             try {
-                def statusCommand = """
-                    curl -X POST https://api.github.com/repos/${GITHUB_REPO}/statuses/${LAST_COMMIT_SHA} ^
-                    -H "Authorization: Bearer ${GITHUB_TOKEN}" ^
-                    -H "Content-Type: application/json" ^
-                    -d "{\\"state\\": \\"success\\", \\"context\\": \\"Jenkins CI\\", \\"description\\": \\"Build passed\\"}"
-                """
-                bat statusCommand
+                def payload = [
+                    state      : "success",
+                    context    : "Jenkins CI",
+                    description: "Build passed"
+                ]
+                withCredentials([string(credentialsId: 'GITHUB_TOKEN', variable: 'TOKEN')]) {
+                    httpRequest(
+                        httpMode: 'POST',
+                        url: "https://api.github.com/repos/${GITHUB_REPO}/statuses/${LAST_COMMIT_SHA}",
+                        customHeaders: [
+                            [name: 'Authorization', value: "Bearer ${TOKEN}"],
+                            [name: 'Content-Type', value: 'application/json']
+                        ],
+                        requestBody: groovy.json.JsonOutput.toJson(payload),
+                        validResponseCodes: '200:299'
+                    )
+                }
             } catch (Exception ex) {
                 echo "Error al actualizar estado del commit como success: ${ex.getMessage()}"
             }
@@ -105,13 +115,23 @@ pipeline {
     failure {
         script {
             try {
-                def statusCommand = """
-                    curl -X POST https://api.github.com/repos/${GITHUB_REPO}/statuses/${LAST_COMMIT_SHA} ^
-                    -H "Authorization: Bearer ${GITHUB_TOKEN}" ^
-                    -H "Content-Type: application/json" ^
-                    -d "{\\"state\\": \\"failure\\", \\"context\\": \\"Jenkins CI\\", \\"description\\": \\"Build failed\\"}"
-                """
-                bat statusCommand
+                def payload = [
+                    state      : "failure",
+                    context    : "Jenkins CI",
+                    description: "Build failed"
+                ]
+                withCredentials([string(credentialsId: 'GITHUB_TOKEN', variable: 'TOKEN')]) {
+                    httpRequest(
+                        httpMode: 'POST',
+                        url: "https://api.github.com/repos/${GITHUB_REPO}/statuses/${LAST_COMMIT_SHA}",
+                        customHeaders: [
+                            [name: 'Authorization', value: "Bearer ${TOKEN}"],
+                            [name: 'Content-Type', value: 'application/json']
+                        ],
+                        requestBody: groovy.json.JsonOutput.toJson(payload),
+                        validResponseCodes: '200:299'
+                    )
+                }
             } catch (Exception ex) {
                 echo "Error al actualizar estado del commit como failure: ${ex.getMessage()}"
             }

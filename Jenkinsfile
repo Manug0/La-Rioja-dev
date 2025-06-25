@@ -11,7 +11,6 @@ pipeline {
         AUTH_FILE_PATH = 'C:\\tmp\\sfdx-auth.json'
         SF_DEPLOYMENT_URL = ''
         SF_DEPLOYMENT_STATUS = ''
-        ERROR_MESSAGE = 'XX'
         SF_DISABLE_TELEMETRY = 'true'
         GITHUB_TAG = 'HSU_START'
 
