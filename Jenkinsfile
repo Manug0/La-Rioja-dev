@@ -15,17 +15,17 @@ pipeline {
         LAST_COMMIT_SHA = ''
     }
     stages {
-        stage('Inicio') {
-            steps {
-                script {
-                    GITHUB_PR_NUMBER = env.CHANGE_ID
-                    GITHUB_SHA = env.GIT_COMMIT
+        // stage('Inicio') {
+        //     steps {
+        //         script {
+        //             GITHUB_PR_NUMBER = env.CHANGE_ID
+        //             GITHUB_SHA = env.GIT_COMMIT
 
-                    echo "🔁 Validación para PR #${GITHUB_PR_NUMBER}"
-                    githubCommitStatus('pending', 'Validación en progreso...')
-                }
-            }
-        }
+        //             echo "🔁 Validación para PR #${GITHUB_PR_NUMBER}"
+        //             githubCommitStatus('pending', 'Validación en progreso...')
+        //         }
+        //     }
+        // }
         stage('Obtener último commit desde GitHub') {
             steps {
                 script {
@@ -93,13 +93,13 @@ pipeline {
         success {
             script {
                 githubCommitStatus('success', 'Validación exitosa ✅')
-                githubCommentPR("✅ Validación completada con éxito. [Ver en Salesforce](${env.SF_DEPLOYMENT_URL})")
+                // githubCommentPR("✅ Validación completada con éxito. [Ver en Salesforce](${env.SF_DEPLOYMENT_URL})")
             }
         }
         failure {
             script {
                 githubCommitStatus('failure', 'Falló la validación ❌')
-                githubCommentPR("❌ Validación fallida. Verifica en Salesforce: ${env.SF_DEPLOYMENT_URL}")
+                // githubCommentPR("❌ Validación fallida. Verifica en Salesforce: ${env.SF_DEPLOYMENT_URL}")
             }
         }
     }
