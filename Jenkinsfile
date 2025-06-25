@@ -1,5 +1,5 @@
 pipeline {
-    agent { label 'salesforce' }
+    agent { label 'windows' }
     environment {
         GITHUB_TOKEN = credentials('github-pat') 
         GITHUB_REPO = 'Manug0/La-Rioja-dev'
