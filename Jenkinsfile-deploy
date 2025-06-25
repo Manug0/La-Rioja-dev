@@ -1,5 +1,5 @@
 pipeline {
-    agent {label 'windows'}
+    agent any
     environment {
         GITHUB_BRANCH = 'main'
         GITHUB_TAG = 'HSU_START'
