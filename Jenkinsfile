@@ -21,7 +21,11 @@ pipeline {
                     GITHUB_PR_NUMBER = env.CHANGE_ID
                     GITHUB_SHA = env.GIT_COMMIT
 
-                    echo "🔁 Validación para PR #${GITHUB_PR_NUMBER}"
+                    if (GITHUB_PR_NUMBER) {
+                        echo "🔁 Validación para PR #${GITHUB_PR_NUMBER}"
+                    } else {
+                        echo "🔁 Validación para rama ${env.GITHUB_BRANCH}"
+                    }
                     githubCommitStatus('pending', 'Validación en progreso...')
                 }
             }
