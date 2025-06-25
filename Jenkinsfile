@@ -1,7 +1,7 @@
 pipeline {
     agent any
     environment {
-        GITHUB_TOKEN = credentials('github-pat') 
+        GITHUB_TOKEN = credentials('GITHUB_PAT') 
         GITHUB_REPO = 'Manug0/La-Rioja-dev'
         GITHUB_BRANCH = 'dev'
 
@@ -30,7 +30,7 @@ pipeline {
             steps {
                 script {
                     try {
-                        withCredentials([string(credentialsId: 'github-pat', variable: 'TOKEN')]) {
+                        withCredentials([string(credentialsId: 'GITHUB_PAT', variable: 'TOKEN')]) {
                             def authHeader = "Authorization: Bearer ${TOKEN}"
                             def apiURL = "https://api.github.com/repos/${GITHUB_REPO}/branches/${GITHUB_BRANCH}"
                             def command = "curl -s -H \"${authHeader}\" \"${apiURL}\" > branch_info.json"
@@ -143,7 +143,7 @@ def githubCommitStatus(String state, String description) {
     """
     def url = "https://api.github.com/repos/${env.GITHUB_REPO}/statuses/${env.GITHUB_SHA}"
 
-    withCredentials([string(credentialsId: 'github-pat', variable: 'GITHUB_TOKEN')]) {
+    withCredentials([string(credentialsId: 'GITHUB_PAT', variable: 'GITHUB_TOKEN')]) {
         httpRequest(
             acceptType: 'APPLICATION_JSON',
             contentType: 'APPLICATION_JSON',
