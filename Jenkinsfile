@@ -29,15 +29,22 @@ pipeline {
         stage('Obtener último commit desde GitHub') {
             steps {
                 script {
-                    withCredentials([string(credentialsId: 'github-pat', variable: 'TOKEN')]) {
-                        def authHeader = "Authorization: Bearer ${TOKEN}"
-                        def apiURL = "https://api.github.com/repos/${GITHUB_REPO}/branches/${GITHUB_BRANCH}"
-                        def command = "curl -s -H \"${authHeader}\" \"${apiURL}\" > branch_info.json"
-                        bat command
+                    try {
+                        withCredentials([string(credentialsId: 'github-pat', variable: 'TOKEN')]) {
+                            def authHeader = "Authorization: Bearer ${TOKEN}"
+                            def apiURL = "https://api.github.com/repos/${GITHUB_REPO}/branches/${GITHUB_BRANCH}"
+                            def command = "curl -s -H \"${authHeader}\" \"${apiURL}\" > branch_info.json"
+                            bat command
 
-                        def branchInfo = readJSON file: 'branch_info.json'
-                        env.LAST_COMMIT_SHA = branchInfo.commit.sha
-                        echo "🔎 Último SHA en ${GITHUB_BRANCH}: ${env.LAST_COMMIT_SHA}"
+                            def branchInfo = readJSON file: 'branch_info.json'
+                            env.LAST_COMMIT_SHA = branchInfo.commit.sha
+                            echo "🔎 Último SHA en ${GITHUB_BRANCH}: ${env.LAST_COMMIT_SHA}"
+                        }
+                    } catch (err) {
+                        echo "❌ Error en 'Obtener último commit desde GitHub': ${err.getMessage()}"
+                        echo "${err}"
+                        currentBuild.result = 'FAILURE'
+                        throw err
                     }
                 }
             }
@@ -45,19 +52,33 @@ pipeline {
         stage('Instalar dependencias') {
             steps {
                 script {
-                    bat 'sf.cmd config set disable-telemetry true --global'
-                    bat 'echo y | sf.cmd plugins install sfdx-git-delta'
-                    bat 'echo y | sf.cmd plugins install sfdx-hardis'
-                    bat 'npm install yaml fs'
+                    try {
+                        bat 'sf.cmd config set disable-telemetry true --global'
+                        bat 'echo y | sf.cmd plugins install sfdx-git-delta'
+                        bat 'echo y | sf.cmd plugins install sfdx-hardis'
+                        bat 'npm install yaml fs'
+                    } catch (err) {
+                        echo "❌ Error en 'Instalar dependencias': ${err.getMessage()}"
+                        echo "${err}"
+                        currentBuild.result = 'FAILURE'
+                        throw err
+                    }
                 }
             }
         }
         stage('Autenticarse en Salesforce') {
             steps {
                 script {
-                    withCredentials([file(credentialsId: 'SFDX_AUTH_URL_HSU', variable: 'AUTH_FILE')]) {
-                        bat "copy %AUTH_FILE% %AUTH_FILE_PATH%"
-                        bat 'sf.cmd org login sfdx-url --sfdx-url-file %AUTH_FILE_PATH% --set-default'
+                    try {
+                        withCredentials([file(credentialsId: 'SFDX_AUTH_URL_HSU', variable: 'AUTH_FILE')]) {
+                            bat "copy %AUTH_FILE% %AUTH_FILE_PATH%"
+                            bat 'sf.cmd org login sfdx-url --sfdx-url-file %AUTH_FILE_PATH% --set-default'
+                        }
+                    } catch (err) {
+                        echo "❌ Error en 'Autenticarse en Salesforce': ${err.getMessage()}"
+                        echo "${err}"
+                        currentBuild.result = 'FAILURE'
+                        throw err
                     }
                 }
             }
@@ -65,25 +86,32 @@ pipeline {
         stage('Delta y Validación') {
             steps {
                 script {
-                    bat 'git fetch origin'
-                    bat "sf.cmd sgd source delta --from ${GITHUB_TAG} --to ${env.LAST_COMMIT_SHA} --output ."
-                    bat 'cd package && dir'
+                    try {
+                        bat 'git fetch origin'
+                        bat "sf.cmd sgd source delta --from ${GITHUB_TAG} --to ${env.LAST_COMMIT_SHA} --output ."
+                        bat 'cd package && dir'
 
-                    def testList = bat(script: 'node scripts/utilities/readTestFile.js', returnStdout: true).trim()
+                        def testList = bat(script: 'node scripts/utilities/readTestFile.js', returnStdout: true).trim()
 
-                    def deployOutput = bat(script: "sf.cmd project deploy validate --manifest package/package.xml --json --test-level RunSpecifiedTests --tests ${testList}", returnStdout: true)
-                    def json = new groovy.json.JsonSlurper().parseText(deployOutput)
+                        def deployOutput = bat(script: "sf.cmd project deploy validate --manifest package/package.xml --json --test-level RunSpecifiedTests --tests ${testList}", returnStdout: true)
+                        def json = new groovy.json.JsonSlurper().parseText(deployOutput)
 
-                    env.SF_DEPLOYMENT_URL = json.result.deployUrl
-                    env.SF_DEPLOYMENT_STATUS = json.status.toString()
+                        env.SF_DEPLOYMENT_URL = json.result.deployUrl
+                        env.SF_DEPLOYMENT_STATUS = json.status.toString()
 
-                    echo "📎 Deployment URL: ${env.SF_DEPLOYMENT_URL}"
-                    echo "📌 Status: ${env.SF_DEPLOYMENT_STATUS}"
+                        echo "📎 Deployment URL: ${env.SF_DEPLOYMENT_URL}"
+                        echo "📌 Status: ${env.SF_DEPLOYMENT_STATUS}"
 
-                    if (env.SF_DEPLOYMENT_STATUS != '0') {
+                        if (env.SF_DEPLOYMENT_STATUS != '0') {
+                            currentBuild.result = 'FAILURE'
+                            env.ERROR_MESSAGE = 'Error en validación Salesforce'
+                            error("❌ Falló validación SF")
+                        }
+                    } catch (err) {
+                        echo "❌ Error en 'Delta y Validación': ${err.getMessage()}"
+                        echo "${err}"
                         currentBuild.result = 'FAILURE'
-                        env.ERROR_MESSAGE = 'Error en validación Salesforce'
-                        error("❌ Falló validación SF")
+                        throw err
                     }
                 }
             }
