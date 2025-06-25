@@ -13,44 +13,16 @@ pipeline {
         GITHUB_TAG = 'HSU_START'
 
         LAST_COMMIT_SHA = ''
-        GITHUB_PR_NUMBER = ''
     }
     stages {
         stage('Inicio') {
             steps {
                 script {
-                    if (env.CHANGE_ID) {
-                        env.GITHUB_PR_NUMBER = env.CHANGE_ID
-                        echo "✅ PR detectado desde CHANGE_ID: #${env.GITHUB_PR_NUMBER}"
-                    } else if (env.ghprbPullId) {
-                        env.GITHUB_PR_NUMBER = env.ghprbPullId
-                        echo "✅ PR detectado desde ghprbPullId: #${env.GITHUB_PR_NUMBER}"
-                    } else {
-                        // Intentar obtener PR desde la branch
-                        def branchName = env.BRANCH_NAME ?: env.GIT_BRANCH
-                        if (branchName && branchName.startsWith('PR-')) {
-                            env.GITHUB_PR_NUMBER = branchName.replaceAll('PR-', '').replaceAll('/.*', '')
-                            echo "✅ PR extraído del nombre de branch: #${env.GITHUB_PR_NUMBER}"
-                        } else {
-                            // Buscar PR asociado al commit actual
-                            env.GITHUB_PR_NUMBER = getPRFromCommit(env.GIT_COMMIT)
-                            if (env.GITHUB_PR_NUMBER && env.GITHUB_PR_NUMBER != 'null') {
-                                echo "✅ PR encontrado por commit: #${env.GITHUB_PR_NUMBER}"
-                            } else {
-                                echo "⚠️ No se pudo determinar el número de PR. Modo de desarrollo/test."
-                                env.GITHUB_PR_NUMBER = 'dev-build'
-                            }
-                        }
-                    }
+                    GITHUB_PR_NUMBER = env.CHANGE_ID
+                    GITHUB_SHA = env.GIT_COMMIT
 
-                    env.GITHUB_SHA = env.GIT_COMMIT
-                    echo "🔁 Validación para PR #${env.GITHUB_PR_NUMBER}"
-                    echo "📋 SHA del commit: ${env.GITHUB_SHA}"
-                    
-                    // Solo actualizar status si tenemos un PR válido
-                    if (env.GITHUB_PR_NUMBER && env.GITHUB_PR_NUMBER != 'dev-build' && env.GITHUB_PR_NUMBER != 'null') {
-                        githubCommitStatus('pending', 'Validación en progreso...')
-                    }
+                    echo "🔁 Validación para PR #${GITHUB_PR_NUMBER}"
+                    githubCommitStatus('pending', 'Validación en progreso...')
                 }
             }
         }
@@ -120,54 +92,20 @@ pipeline {
     post {
         success {
             script {
-                if (env.GITHUB_PR_NUMBER && env.GITHUB_PR_NUMBER != 'dev-build' && env.GITHUB_PR_NUMBER != 'null') {
-                    githubCommitStatus('success', 'Validación exitosa ✅')
-                    githubCommentPR("✅ Validación completada con éxito. [Ver en Salesforce](${env.SF_DEPLOYMENT_URL})")
-                } else {
-                    echo "✅ Validación completada (modo desarrollo)"
-                }
+                githubCommitStatus('success', 'Validación exitosa ✅')
+                githubCommentPR("✅ Validación completada con éxito. [Ver en Salesforce](${env.SF_DEPLOYMENT_URL})")
             }
         }
         failure {
             script {
-                if (env.GITHUB_PR_NUMBER && env.GITHUB_PR_NUMBER != 'dev-build' && env.GITHUB_PR_NUMBER != 'null') {
-                    githubCommitStatus('failure', 'Falló la validación ❌')
-                    githubCommentPR("❌ Validación fallida. Verifica en Salesforce: ${env.SF_DEPLOYMENT_URL}")
-                } else {
-                    echo "❌ Validación fallida (modo desarrollo)"
-                }
+                githubCommitStatus('failure', 'Falló la validación ❌')
+                githubCommentPR("❌ Validación fallida. Verifica en Salesforce: ${env.SF_DEPLOYMENT_URL}")
             }
         }
     }
-}
-
-def getPRFromCommit(String commitSha) {
-    if (!commitSha) return null
-    
-    try {
-        withCredentials([string(credentialsId: 'github-pat', variable: 'TOKEN')]) {
-            def authHeader = "Authorization: Bearer ${TOKEN}"
-            def apiURL = "https://api.github.com/repos/${env.GITHUB_REPO}/commits/${commitSha}/pulls"
-            def command = "curl -s -H \"${authHeader}\" \"${apiURL}\" > pr_info.json"
-            bat command
-
-            def prInfo = readJSON file: 'pr_info.json'
-            if (prInfo && prInfo.size() > 0) {
-                return prInfo[0].number.toString()
-            }
-        }
-    } catch (Exception e) {
-        echo "⚠️ Error al buscar PR por commit: ${e.getMessage()}"
-    }
-    return null
 }
 
 def githubCommitStatus(String state, String description) {
-    if (!env.GITHUB_SHA) {
-        echo "⚠️ No hay SHA disponible para actualizar status"
-        return
-    }
-    
     def body = """
     {
         "state": "${state}",
@@ -177,47 +115,30 @@ def githubCommitStatus(String state, String description) {
     """
     def url = "https://api.github.com/repos/${env.GITHUB_REPO}/statuses/${env.GITHUB_SHA}"
 
-    try {
-        withCredentials([string(credentialsId: 'github-pat', variable: 'GITHUB_TOKEN')]) {
-            httpRequest(
-                acceptType: 'APPLICATION_JSON',
-                contentType: 'APPLICATION_JSON',
-                customHeaders: [[name: 'Authorization', value: "token ${GITHUB_TOKEN}"]],
-                httpMode: 'POST',
-                requestBody: body,
-                url: url,
-                validResponseCodes: '200:299'
-            )
-        }
-        echo "✅ GitHub status actualizado: ${state}"
-    } catch (Exception e) {
-        echo "⚠️ Error al actualizar GitHub status: ${e.getMessage()}"
+    withCredentials([string(credentialsId: 'github-pat', variable: 'GITHUB_TOKEN')]) {
+        httpRequest(
+            acceptType: 'APPLICATION_JSON',
+            contentType: 'APPLICATION_JSON',
+            customHeaders: [[name: 'Authorization', value: "token ${GITHUB_TOKEN}"]],
+            httpMode: 'POST',
+            requestBody: body,
+            url: url,
+            validResponseCodes: '200:299'
+        )
     }
 }
 
 def githubCommentPR(String message) {
-    if (!env.GITHUB_PR_NUMBER || env.GITHUB_PR_NUMBER == 'null' || env.GITHUB_PR_NUMBER == 'dev-build') {
-        echo "⚠️ No hay PR válido para comentar"
-        return
-    }
-    
     def url = "https://api.github.com/repos/${env.GITHUB_REPO}/issues/${env.GITHUB_PR_NUMBER}/comments"
     def body = """{ "body": "${message}" }"""
 
-    try {
-        withCredentials([string(credentialsId: 'github-pat', variable: 'GITHUB_TOKEN')]) {
-            httpRequest(
-                acceptType: 'APPLICATION_JSON',
-                contentType: 'APPLICATION_JSON',
-                customHeaders: [[name: 'Authorization', value: "token ${GITHUB_TOKEN}"]],
-                httpMode: 'POST',
-                requestBody: body,
-                url: url,
-                validResponseCodes: '200:299'
-            )
-        }
-        echo "✅ Comentario añadido al PR #${env.GITHUB_PR_NUMBER}"
-    } catch (Exception e) {
-        echo "⚠️ Error al comentar en PR: ${e.getMessage()}"
-    }
+    httpRequest(
+        acceptType: 'APPLICATION_JSON',
+        contentType: 'APPLICATION_JSON',
+        customHeaders: [[name: 'Authorization', value: "token ${env.GITHUB_TOKEN}"]],
+        httpMode: 'POST',
+        requestBody: body,
+        url: url,
+        validResponseCodes: '200:299'
+    )
 }
