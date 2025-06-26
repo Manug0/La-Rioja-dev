@@ -62,15 +62,17 @@ pipeline {
         }
         stage("Validar package.xml") {
             steps {
-                dir('La-Rioja-dev') {
-                    bat """
-                        git switch ${GITHUB_BRANCH}
-                        SET VALIDATE_ENV = 'dev'
-                        FOR /F %%i IN ('node scripts\\utilities\\readTestFile.js') DO SET TEST_LIST=%%i
-                        echo Lista de tests: %%TEST_LIST%%
-                        ${SF_CMD} project deploy start --manifest package\\package.xml --test-level RunSpecifiedTests --tests %%TEST_LIST%%
+                bat """
+                    cd La-Rioja-dev
+                    git switch dev
+
+                    echo Leyendo lista de tests
+                    node scripts\\utilities\\readTestFile.js > tests.txt
+                    set /p TEST_LIST=<tests.txt
+
+                    echo Lista de tests: %TEST_LIST%
+                    ${SF_CMD} project deploy start --manifest package\\package.xml --test-level RunSpecifiedTests --tests %TEST_LIST% --target-org pre
                     """
-                }
             }
         }
     }
