@@ -45,7 +45,7 @@ pipeline {
         }
         stage("Descargar proyecto Git") {
             steps {
-                bat "GIT_SSL_NO_VERIFY=true git clone https://github.com/${GITHUB_REPO}.git"
+                bat "set GIT_SSL_NO_VERIFY=true && git clone https://github.com/${GITHUB_REPO}.git"
             }
         }
         stage("Crear package.xml") {
