@@ -84,8 +84,37 @@ pipeline {
                 script {
                     try {
                         bat 'git fetch origin'
-                        bat "\"${SF_CMD}\" sgd source delta --from ${GITHUB_TAG} --to ${LAST_COMMIT_SHA} --output-dir | -o ."
-                        bat 'cd package && dir'
+                        
+                        // Limpiar directorios anteriores
+                        bat 'if exist package rmdir /s /q package'
+                        bat 'if exist manifest rmdir /s /q manifest'
+                        bat 'mkdir manifest'
+                        
+                        echo "🔄 Generando delta entre ${GITHUB_TAG} y ${LAST_COMMIT_SHA}..."
+                        
+                        // Comando sgd corregido
+                        bat "\"${SF_CMD}\" sgd source delta --from ${GITHUB_TAG} --to ${LAST_COMMIT_SHA} --output manifest --generate-delta"
+                        
+                        // Verificar y mostrar el contenido del package.xml generado
+                        if (fileExists('manifest\\package.xml')) {
+                            echo "📦 Contenido del package.xml generado:"
+                            bat "type manifest\\package.xml"
+                        } else {
+                            echo "⚠️ No se generó package.xml - Sin cambios de metadata"
+                            echo "🔄 Creando package.xml básico para validación..."
+                            
+                            def basicPackageXml = '''<?xml version="1.0" encoding="UTF-8"?>
+    <Package xmlns="http://soap.sforce.com/2006/04/metadata">
+        <types>
+            <members>HSU_SistemasUpdater</members>
+            <name>ApexClass</name>
+        </types>
+        <version>59.0</version>
+    </Package>'''
+                            
+                            writeFile file: 'manifest\\package.xml', text: basicPackageXml
+                            echo "✅ Package.xml básico creado"
+                        }
 
                         def testConfig = readYaml file: 'test-config.yaml'
                         def extraTests = testConfig.tests.extra_tests
@@ -93,7 +122,7 @@ pipeline {
                         
                         echo "🧪 Tests a ejecutar: ${testList}"
 
-                        def deployOutput = bat(script: "\"${SF_CMD}\" project deploy validate --manifest package/package.xml --json --test-level RunSpecifiedTests --tests ${testList}", returnStdout: true)
+                        def deployOutput = bat(script: "\"${SF_CMD}\" project deploy validate --manifest manifest/package.xml --json --test-level RunSpecifiedTests --tests ${testList}", returnStdout: true)
                         def json = new groovy.json.JsonSlurper().parseText(deployOutput)
 
                         env.SF_DEPLOYMENT_URL = json.result.deployUrl
@@ -121,13 +150,11 @@ pipeline {
         success {
             script {
                 githubCommitStatus('success', 'Validación exitosa ✅')
-                // githubCommentPR("✅ Validación completada con éxito. [Ver en Salesforce](${env.SF_DEPLOYMENT_URL})")
             }
         }
         failure {
             script {
                 githubCommitStatus('failure', 'Falló la validación ❌')
-                // githubCommentPR("❌ Validación fallida. Verifica en Salesforce: ${env.SF_DEPLOYMENT_URL}")
             }
         }
     }
@@ -154,19 +181,4 @@ def githubCommitStatus(String state, String description) {
             validResponseCodes: '200:299'
         )
     }
-}
-
-def githubCommentPR(String message) {
-    def url = "https://api.github.com/repos/${env.GITHUB_REPO}/issues/${env.GITHUB_PR_NUMBER}/comments"
-    def body = """{ "body": "${message}" }"""
-
-    httpRequest(
-        acceptType: 'APPLICATION_JSON',
-        contentType: 'APPLICATION_JSON',
-        customHeaders: [[name: 'Authorization', value: "token ${env.GITHUB_TOKEN}"]],
-        httpMode: 'POST',
-        requestBody: body,
-        url: url,
-        validResponseCodes: '200:299'
-    )
 }
