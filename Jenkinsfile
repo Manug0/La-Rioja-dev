@@ -1,274 +1,272 @@
 pipeline {
     agent any
     environment {
-        SFDX_AUTH_URL = credentials('SFDX_AUTH_URL_HSU')
-        GITHUB_HSU_TAG = 'HSU_START'
-        SFDX_ALIAS = 'hsu'
+        GITHUB_TOKEN = credentials('GITHUB-PAT') 
+        GITHUB_REPO = 'Manug0/La-Rioja-dev'
+        GITHUB_BRANCH = 'dev'
+        GITHUB_LAST_COMMIT = ''
+        GITHUB_TAG = 'HSU_START'
+
+        VALIDATE_ENV = 'dev'
+
+        AUTH_FILE_PATH = 'C:\\tmp\\sfdx-auth.json'
         SF_CMD = 'C:\\Users\\Manu\\AppData\\Local\\sf\\client\\2.92.7-df40848\\bin\\sf.cmd'
-        GITHUB_TOKEN = credentials('github-pat')
-    }
+        SF_DEPLOYMENT_URL = ''
+        SF_DEPLOYMENT_STATUS = ''
+        ERROR_MESSAGE = 'XX'
+        SF_DISABLE_TELEMETRY = 'true'
 
+    }
     stages {
-        stage('Checkout') {
+        stage("Leer información de GitHub") {
             steps {
-                checkout scm
                 script {
-                    // Verificar si el repo está shallow antes de hacer unshallow
-                    def isShallow = bat(script: "git rev-parse --is-shallow-repository", returnStdout: true).trim()
-                    if (isShallow == 'true') {
-                        echo "📥 Repositorio shallow detectado, obteniendo historial completo..."
-                        bat "git fetch --unshallow"
-                    } else {
-                        echo "📥 Repositorio ya completo"
-                    }
-                    
-                    // Fetch de tags
-                    bat "git fetch --tags --force"
-                    
-                    updateGitHubStatus('pending', 'Iniciando validación...', 'pr-validation')
-                    echo "🔄 Iniciando validación de PR/Push..."
+                    def branchInfoUrl = "https://api.github.com/repos/${GITHUB_REPO}/branches/${GITHUB_BRANCH}"
+                    def response = httpRequest(
+                        httpMode: 'GET',
+                        customHeaders: [[name: 'Authorization', value: "token ${GITHUB_TOKEN}"]],
+                        url: branchInfoUrl,
+                        validResponseCodes: '200'
+                    )
+
+                    def branchInfo = readJSON text: response.content
+                    GITHUB_LAST_COMMIT = branchInfo.commit.sha
+                    echo "Último commit SHA: ${GITHUB_LAST_COMMIT}"
                 }
             }
         }
-
-        stage('Crear package.xml con delta') {
+        stage("Instalar dependencias") {
             steps {
-                script {
-                    echo "📦 Creando package.xml de validación usando dif entre ${env.GITHUB_HSU_TAG} y HEAD..."
-
-                    // Verificar que el tag existe antes de continuar
-                    def tagExists = bat(script: "git tag -l ${env.GITHUB_HSU_TAG}", returnStdout: true).trim()
-                    if (!tagExists) {
-                        error "❌ Tag ${env.GITHUB_HSU_TAG} no encontrado en el repositorio"
-                    }
-                    echo "✅ Tag ${env.GITHUB_HSU_TAG} encontrado: ${tagExists}"
-
-                    // DIAGNÓSTICO: Verificar estructura del proyecto
-                    echo "🔍 DIAGNÓSTICO: Verificando estructura del proyecto..."
-                    
-                    // Verificar sfdx-project.json
-                    if (fileExists('sfdx-project.json')) {
-                        echo "✅ sfdx-project.json encontrado:"
-                        bat "type sfdx-project.json"
-                    } else {
-                        echo "❌ sfdx-project.json NO encontrado"
-                    }
-                    
-                    // Verificar estructura de directorios
-                    echo "📁 Estructura de directorios:"
-                    bat "dir /s /b force-app\\main\\default"
-                    
-                    // Verificar cambios específicos
-                    echo "📋 Cambios detectados por git:"
-                    bat "git diff --name-status ${env.GITHUB_HSU_TAG}..HEAD"
-                    
-                    // Verificar tipos de archivo
-                    echo "📄 Tipos de archivos modificados:"
-                    def changedFiles = bat(script: "git diff --name-only ${env.GITHUB_HSU_TAG}..HEAD", returnStdout: true).trim()
-                    echo "Archivos cambiados:"
-                    echo changedFiles
-                    
-                    // Filtrar archivos de Salesforce
-                    def sfFiles = []
-                    changedFiles.split('\n').each { file ->
-                        if (file.endsWith('.cls') || file.endsWith('.trigger') || 
-                            file.endsWith('.page') || file.endsWith('.component') || 
-                            file.endsWith('-meta.xml')) {
-                            sfFiles.add(file)
-                        }
-                    }
-                    echo "📄 Archivos de Salesforce modificados: ${sfFiles.join(', ')}"
-
-                    // Autenticación
-                    echo "🔐 Autenticando con Salesforce..."
-                    bat 'echo %SFDX_AUTH_URL% > auth_url.txt'
-                    bat "${SF_CMD} org login sfdx-url --sfdx-url-file auth_url.txt --alias %SFDX_ALIAS%"
-                    echo "✅ Autenticación exitosa"
-
-                    // Limpiar y crear carpetas
-                    bat "if exist package rmdir /s /q package"
-                    bat "if exist manifest rmdir /s /q manifest"
-                    bat "mkdir manifest"
-
-                    try {
-                        // VERSIÓN MEJORADA: Usar la nueva sintaxis recomendada
-                        echo "🔄 Ejecutando sgd para generar delta (versión mejorada)..."
-                        
-                        // Opción 1: Usar la nueva sintaxis
-                        bat "\"${SF_CMD}\" sgd source delta --from \"${env.GITHUB_HSU_TAG}\" --to HEAD --output-dir manifest --generate-delta"
-                        
-                        // Verificar si se generaron archivos
-                        echo "📁 Contenido de manifest después de sgd:"
-                        bat "dir manifest"
-                        
-                        // Verificar archivos específicos
-                        if (fileExists('manifest\\package.xml')) {
-                            echo "✅ package.xml encontrado"
-                            bat "type manifest\\package.xml"
-                        }
-                        
-                        if (fileExists('manifest\\destructiveChanges.xml')) {
-                            echo "🗑️ destructiveChanges.xml encontrado"
-                            bat "type manifest\\destructiveChanges.xml"
-                        }
-                        
-                        echo "✅ package.xml generado con delta"
-                    } catch (Exception e) {
-                        echo "❌ Error con nueva sintaxis: ${e.getMessage()}"
-                        echo "🔧 Intentando método manual de respaldo..."
-                        createManualPackageXml()
-                    }
-
-                    // Verificar package.xml final
-                    if (fileExists('manifest\\package.xml')) {
-                        echo "📄 Contenido final de package.xml:"
-                        bat "type manifest\\package.xml"
-                        
-                        // Verificar que no esté vacío
-                        def packageContent = readFile('manifest\\package.xml')
-                        if (packageContent.contains('<types>')) {
-                            env.SKIP_VALIDATION = "false"
-                            echo "✅ package.xml contiene metadata para validar"
-                        } else {
-                            env.SKIP_VALIDATION = "true"
-                            echo "⚠️ package.xml está vacío - sin cambios de metadata"
-                        }
-                    } else {
-                        echo "⚠️ No hay cambios de metadata de Salesforce para validar"
-                        echo "✅ Pipeline completado - Sin validación necesaria"
-                        env.SKIP_VALIDATION = "true"
-                    }
+                bat """
+                    ${SF_CMD} plugins install sfdx-git-delta --force
+                    npm install yaml fs
+                """
+            }
+        }
+        stage("Descargar proyecto Git") {
+            steps {
+                bat "GIT_SSL_NO_VERIFY=true git clone https://github.com/${GITHUB_REPO}.git"
+            }
+        }
+        stage("Crear package.xml") {
+            steps {
+                dir('La-Rioja-dev') {
+                    bat """
+                        echo Generando delta entre el tag y el commit
+                        ${SF_CMD} sgd source delta --from ${GITHUB_TAG} --to ${GITHUB_LAST_COMMIT} --output .
+                        dir package
+                        type package\\package.xml
+                    """
                 }
             }
         }
-
-        stage('Validar en Salesforce') {
-            when {
-                environment name: 'SKIP_VALIDATION', value: 'false'
-            }
+        stage("Validar package.xml") {
             steps {
-                script {
-                    updateGitHubStatus('pending', 'Validando metadatos...', 'pr-validation')
-                    echo "🔍 Ejecutando validación (checkOnly) en Salesforce..."
-
-                    try {
-                        // Ajusta el testLevel según tus necesidades
-                        bat "${SF_CMD} project deploy validate --manifest manifest\\package.xml --test-level RunLocalTests --target-org %SFDX_ALIAS%"
-                        updateGitHubStatus('success', 'Validación exitosa', 'pr-validation')
-                        echo "✅ Validación completada sin errores"
-                    } catch (Exception e) {
-                        updateGitHubStatus('failure', 'Error en la validación', 'pr-validation')
-                        echo "❌ Validación fallida: ${e.getMessage()}"
-                        error "Validación fallida"
-                    }
+                dir('La-Rioja-dev') {
+                    bat """
+                        git switch ${GITHUB_BRANCH}
+                        SET VALIDATE_ENV = 'dev'
+                        FOR /F %%i IN ('node scripts\\utilities\\readTestFile.js') DO SET TEST_LIST=%%i
+                        echo Lista de tests: %%TEST_LIST%%
+                        ${SF_CMD} project deploy start --manifest package\\package.xml --test-level RunSpecifiedTests --tests %%TEST_LIST%%
+                    """
                 }
             }
         }
     }
-
     post {
-        always {
-            script {
-                // Limpieza
-                bat "if exist auth_url.txt del auth_url.txt"
-                echo "🧹 Limpieza completada"
-            }
+        success {
+            echo "Validación completada correctamente ✅"
+        }
+        failure {
+            echo "Falló la validación del paquete ❌"
         }
     }
+
+
 }
 
-def createManualPackageXml() {
-    echo "🔧 Creando package.xml manual basado en cambios detectados..."
-    
-    // Obtener lista de archivos cambiados
-    def changedFiles = bat(script: "git diff --name-only ${env.GITHUB_HSU_TAG}..HEAD", returnStdout: true).trim().split('\n')
-    
-    def packageContent = """<?xml version="1.0" encoding="UTF-8"?>
-<Package xmlns="http://soap.sforce.com/2006/04/metadata">
-"""
-    
-    def apexClasses = []
-    def triggers = []
-    def pages = []
-    def components = []
-    
-    // Clasificar archivos por tipo
-    changedFiles.each { file ->
-        if (file.endsWith('.cls') && file.contains('force-app/main/default/classes/')) {
-            def className = file.tokenize('/').last().replace('.cls', '')
-            apexClasses.add(className)
-        } else if (file.endsWith('.trigger') && file.contains('force-app/main/default/triggers/')) {
-            def triggerName = file.tokenize('/').last().replace('.trigger', '')
-            triggers.add(triggerName)
-        }
-        // Agregar más tipos según necesites
-    }
-    
-    // Agregar ApexClass
-    if (apexClasses) {
-        packageContent += """    <types>
-"""
-        apexClasses.each { className ->
-            packageContent += "        <members>${className}</members>\n"
-        }
-        packageContent += """        <name>ApexClass</name>
-    </types>
-"""
-    }
-    
-    // Agregar ApexTrigger
-    if (triggers) {
-        packageContent += """    <types>
-"""
-        triggers.each { triggerName ->
-            packageContent += "        <members>${triggerName}</members>\n"
-        }
-        packageContent += """        <name>ApexTrigger</name>
-    </types>
-"""
-    }
-    
-    packageContent += """    <version>61.0</version>
-</Package>"""
-    
-    // Escribir archivo
-    writeFile file: 'manifest\\package.xml', text: packageContent
-    echo "✅ package.xml manual creado"
-}
 
-def updateGitHubStatus(state, description, context) {
-    try {
-        def repoUrl = scm.getUserRemoteConfigs()[0].getUrl()
-        def repoName = repoUrl.tokenize('/').last().replace('.git', '')
-        def repoOwner = repoUrl.tokenize('/')[-2]
-        def commitSha = env.GIT_COMMIT
-        def targetUrl = "${BUILD_URL}console"
+//     stages {
+//         stage('Obtener último commit desde GitHub') {
+//             steps {
+//                 script {
+//                     try {
+//                         withCredentials([string(credentialsId: 'GITHUB-PAT', variable: 'TOKEN')]) {
+//                             // Escribe el token en un archivo temporal para evitar interpolación directa
+//                             writeFile file: 'token.txt', text: TOKEN
+//                             def apiURL = "https://api.github.com/repos/${GITHUB_REPO}/branches/${GITHUB_BRANCH}"
+//                             // Usa el archivo temporal en el comando curl
+//                             bat 'set /p TOKEN=<token.txt && curl -s -H "Authorization: Bearer %TOKEN%" "' + apiURL + '" > branch_info.json'
+//                             bat "type branch_info.json" // Para depuración
 
-        def payload = [
-            state       : state,
-            target_url  : targetUrl,
-            description : description,
-            context     : "jenkins/${context}"
-        ]
+//                             def branchInfo = readJSON file: 'branch_info.json'
+//                             def sha = branchInfo.commit.sha?.toString()
+//                             echo "SHA encontrado: ${sha}"
+//                             GITHUB_LAST_COMMIT = sha
+//                         }
+//                     } catch (err) {
+//                         echo "❌ Error en 'Obtener último commit desde GitHub': ${err.getMessage()}"
+//                         echo "${err}"
+//                         currentBuild.result = 'FAILURE'
+//                         throw err
+//                     }
+//                 }
+//             }
+//         }
+//         stage('Instalar dependencias') {
+//             steps {
+//                 script {
+//                     try {
+//                         bat "${SF_CMD} config set disable-telemetry true --global"
+//                         bat "echo y | ${SF_CMD} plugins install sfdx-git-delta"
+//                         bat "echo y | ${SF_CMD} plugins install sfdx-hardis"
+//                         bat "npm install yaml fs"
+//                     } catch (err) {
+//                         echo "❌ Error en 'Instalar dependencias': ${err.getMessage()}"
+//                         echo "${err}"
+//                         currentBuild.result = 'FAILURE'
+//                         throw err
+//                     }
+//                 }
+//             }
+//         }
+//         stage('Autenticarse en Salesforce') {
+//             steps {
+//                 script {
+//                     try {
+//                         withCredentials([string(credentialsId: 'SFDX_AUTH_URL_HSU', variable: 'SFDX_AUTH_URL')]) {
+//                             // Crear archivo temporal con la URL
+//                             writeFile file: 'sfdx_auth_url.txt', text: SFDX_AUTH_URL
+//                             bat "\"${SF_CMD}\" org login sfdx-url --sfdx-url-file sfdx_auth_url.txt --set-default"
+//                             // Limpiar archivo temporal
+//                             bat "del sfdx_auth_url.txt"
+//                         }
+//                     } catch (err) {
+//                         echo "❌ Error en 'Autenticarse en Salesforce': ${err.getMessage()}"
+//                         echo "${err}"
+//                         currentBuild.result = 'FAILURE'
+//                         throw err
+//                     }
+//                 }
+//             }
+//         }
+//         stage("Descargar proyecto git"){
+//             steps{
+//                 sh "GIT_SSL_NO_VERIFY=true git clone https://${GITLAB_USER_AUTH}:${GITLAB_API_TOKEN}@10.254.113.3/salesforce/tesa/sf-bien.git"
+//             }
+//         }
+//         stage("crear package.xml"){
+//             steps{
+//                 dir('sf-bien'){
+//                     echo "Creando package.xml"
+//                     sh "ls -l"
+//                     sh "sf sgd source delta --from  ${GITLAB_FIRST_COMMIT} --to ${GITLAB_LAST_COMMIT}   --output '.' "
+//                     sh "cd package && ls -l"
+//                     sh "cat package/package.xml"
+//                 }
+//             }
+//         }
+//         stage('Delta y Validación') {
+//             steps {
+//                 script {
+//                     try {
+//                         bat 'git fetch origin'
+                        
+//                         // Limpiar directorios anteriores
+//                         bat 'if exist package rmdir /s /q package'
+//                         bat 'if exist manifest rmdir /s /q manifest'
+//                         bat 'mkdir manifest'
+                        
+//                         echo "🔄 Generando delta entre ${GITHUB_TAG} y ${GITHUB_LAST_COMMIT}..."
+                        
+//                         // Comando sgd corregido
+//                         bat "\"${SF_CMD}\" sgd source delta --from ${GITHUB_TAG} --to ${GITHUB_LAST_COMMIT} --output manifest --generate-delta"
+                        
+//                         // Verificar y mostrar el contenido del package.xml generado
+//                         if (fileExists('manifest\\package.xml')) {
+//                             echo "📦 Contenido del package.xml generado:"
+//                             bat "type manifest\\package.xml"
+//                         } else {
+//                             echo "⚠️ No se generó package.xml - Sin cambios de metadata"
+//                             echo "🔄 Creando package.xml básico para validación..."
+                            
+//                             def basicPackageXml = '''<?xml version="1.0" encoding="UTF-8"?>
+//                                 <Package xmlns="http://soap.sforce.com/2006/04/metadata">
+//                                     <types>
+//                                         <members>HSU_SistemasUpdater</members>
+//                                         <name>ApexClass</name>
+//                                     </types>
+//                                     <version>59.0</version>
+//                                 </Package>'''
+                            
+//                             writeFile file: 'manifest\\package.xml', text: basicPackageXml
+//                             echo "✅ Package.xml básico creado"
+//                         }
 
-        def jsonPayload = groovy.json.JsonOutput.toJson(payload)
+//                         def testConfig = readYaml file: 'test-config.yaml'
+//                         def extraTests = testConfig.tests.extra_tests
+//                         def testList = extraTests.join(',')
+                        
+//                         echo "🧪 Tests a ejecutar: ${testList}"
 
-        withCredentials([usernamePassword(credentialsId: 'github-pat', usernameVariable: 'GH_USER', passwordVariable: 'GH_TOKEN')]) {
-            httpRequest(
-                acceptType: 'APPLICATION_JSON',
-                contentType: 'APPLICATION_JSON',
-                httpMode: 'POST',
-                requestBody: jsonPayload,
-                url: "https://api.github.com/repos/${repoOwner}/${repoName}/statuses/${commitSha}",
-                customHeaders: [
-                    [name: 'Authorization', value: "token ${GH_TOKEN}"],
-                    [name: 'User-Agent', value: 'Jenkins-Pipeline']
-                ]
-            )
-        }
+//                         def deployOutput = bat(script: "\"${SF_CMD}\" project deploy validate --manifest manifest/package.xml --json --test-level RunSpecifiedTests --tests ${testList}", returnStdout: true)
+//                         def json = new groovy.json.JsonSlurper().parseText(deployOutput)
 
-        echo "✅ GitHub status actualizado: ${state} - ${description}"
-    } catch (Exception e) {
-        echo "⚠️ Error actualizando GitHub status: ${e.getMessage()}"
-    }
-}
+//                         env.SF_DEPLOYMENT_URL = json.result.deployUrl
+//                         env.SF_DEPLOYMENT_STATUS = json.status.toString()
+
+//                         echo "📎 Deployment URL: ${env.SF_DEPLOYMENT_URL}"
+//                         echo "📌 Status: ${env.SF_DEPLOYMENT_STATUS}"
+
+//                         if (env.SF_DEPLOYMENT_STATUS != '0') {
+//                             currentBuild.result = 'FAILURE'
+//                             env.ERROR_MESSAGE = 'Error en validación Salesforce'
+//                             error("❌ Falló validación SF")
+//                         }
+//                     } catch (err) {
+//                         echo "❌ Error en 'Delta y Validación': ${err.getMessage()}"
+//                         echo "${err}"
+//                         currentBuild.result = 'FAILURE'
+//                         throw err
+//                     }
+//                 }
+//             }
+//         }
+//     }
+//     post {
+//         success {
+//             script {
+//                 githubCommitStatus('success', 'Validación exitosa ✅')
+//             }
+//         }
+//         failure {
+//             script {
+//                 githubCommitStatus('failure', 'Falló la validación ❌')
+//             }
+//         }
+//     }
+// }
+
+// def githubCommitStatus(String state, String description) {
+//     def body = """
+//     {
+//         "state": "${state}",
+//         "description": "${description}",
+//         "context": "Jenkins CI"
+//     }
+//     """
+//     def url = "https://api.github.com/repos/${env.GITHUB_REPO}/statuses/${env.GITHUB_SHA}"
+
+//     withCredentials([string(credentialsId: 'GITHUB-PAT', variable: 'GITHUB_TOKEN')]) {
+//         httpRequest(
+//             acceptType: 'APPLICATION_JSON',
+//             contentType: 'APPLICATION_JSON',
+//             customHeaders: [[name: 'Authorization', value: "token ${GITHUB_TOKEN}"]],
+//             httpMode: 'POST',
+//             requestBody: body,
+//             url: url,
+//             validResponseCodes: '200:299'
+//         )
+//     }
+// }
