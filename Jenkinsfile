@@ -54,28 +54,70 @@ pipeline {
         stage("Crear package.xml") {
             steps {
                 dir('La-Rioja-dev') {
-                    bat """
-                        echo Generando delta entre el tag y el commit
-                        ${SF_CMD} sgd source delta --from ${GITHUB_TAG} --to ${GITHUB_LAST_COMMIT} --output .
-                        dir package
-                        type package\\package.xml
-                    """
+                    script {
+                        try {
+                            echo "🔄 Generando delta entre ${GITHUB_TAG} y ${GITHUB_LAST_COMMIT}"
+                            bat "\"${SF_CMD}\" sgd source delta --from ${GITHUB_TAG} --to ${GITHUB_LAST_COMMIT} --output ."
+                            
+                            if (fileExists('package\\package.xml')) {
+                                echo "📦 Package.xml generado con cambios:"
+                                bat "type package\\package.xml"
+                                env.HAS_CHANGES = 'true'
+                            } else {
+                                echo "✅ Sin cambios de metadata entre ${GITHUB_TAG} y ${GITHUB_LAST_COMMIT}"
+                                echo "🏁 Pipeline completado - No hay nada que validar"
+                                env.HAS_CHANGES = 'false'
+                            }
+                        } catch (err) {
+                            echo "❌ Error generando package: ${err.getMessage()}"
+                            currentBuild.result = 'FAILURE'
+                            throw err
+                        }
+                    }
                 }
             }
         }
         stage("Validar package.xml") {
+            when {
+                environment name: 'HAS_CHANGES', value: 'true'
+            }
             steps {
-                bat """
-                    cd La-Rioja-dev
-                    git switch dev
-
-                    echo Leyendo lista de tests
-                    node scripts\\utilities\\readTestFile.js > tests.txt
-                    set /p TEST_LIST=<tests.txt
-
-                    echo Lista de tests: %TEST_LIST%
-                    ${SF_CMD} project deploy start --manifest package\\package.xml --test-level RunSpecifiedTests --tests %TEST_LIST% --target-org pre
-                    """
+                dir('La-Rioja-dev') {
+                    script {
+                        try {
+                            bat "git switch dev"
+                            
+                            // Verificar si existe package.xml
+                            if (!fileExists('package\\package.xml')) {
+                                echo "⚠️ No hay package.xml - Sin cambios para validar"
+                                echo "✅ Pipeline completado exitosamente"
+                                return
+                            }
+                            
+                            echo "📦 Contenido final del package.xml:"
+                            bat "type package\\package.xml"
+                            
+                            // Leer tests
+                            bat "node scripts\\utilities\\readTestFile.js > tests.txt"
+                            def testList = readFile('tests.txt').trim()
+                            
+                            echo "🧪 Tests configurados: ${testList}"
+                            
+                            if (!testList || testList.isEmpty()) {
+                                echo "⚠️ No hay tests configurados - Usando RunLocalTests"
+                                bat "\"${SF_CMD}\" project deploy validate --manifest package\\package.xml --test-level RunLocalTests"
+                            } else {
+                                echo "🧪 Ejecutando tests específicos: ${testList}"
+                                bat "\"${SF_CMD}\" project deploy validate --manifest package\\package.xml --test-level RunSpecifiedTests --tests ${testList}"
+                            }
+                            
+                        } catch (err) {
+                            echo "❌ Error en validación: ${err.getMessage()}"
+                            currentBuild.result = 'FAILURE'
+                            throw err
+                        }
+                    }
+                }
             }
         }
     }
