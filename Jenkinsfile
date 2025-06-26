@@ -57,7 +57,7 @@ pipeline {
                 script {
                     try {
                         bat '"C:\\Users\\Manu\\AppData\\Local\\sf\\client\\2.92.7-df40848\\bin\\sf.cmd" config set disable-telemetry true --global'
-                        bat 'echo y | sf.cmd plugins install sfdx-git-delta'
+                        bat 'echo y | "C:\\Users\\Manu\\AppData\\Local\\sf\\client\\2.92.7-df40848\\bin\\sf.cmd" plugins install sfdx-git-delta'
                         bat 'echo y | sf.cmd plugins install sfdx-hardis'
                         bat 'npm install yaml fs'
                     } catch (err) {
