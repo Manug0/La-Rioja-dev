@@ -16,17 +16,6 @@ pipeline {
         LAST_COMMIT_SHA = ''
     }
     stages {
-        // stage('Inicio') {
-        //     steps {
-        //         script {
-        //             GITHUB_PR_NUMBER = env.CHANGE_ID
-        //             GITHUB_SHA = env.GIT_COMMIT
-
-        //             echo "🔁 Validación para PR #${GITHUB_PR_NUMBER}"
-        //             githubCommitStatus('pending', 'Validación en progreso...')
-        //         }
-        //     }
-        // }
         stage('Obtener último commit desde GitHub') {
             steps {
                 script {
@@ -37,12 +26,12 @@ pipeline {
                             def apiURL = "https://api.github.com/repos/${GITHUB_REPO}/branches/${GITHUB_BRANCH}"
                             // Usa el archivo temporal en el comando curl
                             bat 'set /p TOKEN=<token.txt && curl -s -H "Authorization: Bearer %TOKEN%" "' + apiURL + '" > branch_info.json'
-                            bat "type branch_info.json" // Para depuración, puedes quitarlo luego
+                            bat "type branch_info.json" // Para depuración
 
                             def branchInfo = readJSON file: 'branch_info.json'
                             def sha = branchInfo.commit.sha?.toString()
                             echo "SHA encontrado: ${sha}"
-                            env.LAST_COMMIT_SHA = sha
+                            LAST_COMMIT_SHA = sha
                         }
                     } catch (err) {
                         echo "❌ Error en 'Obtener último commit desde GitHub': ${err.getMessage()}"
@@ -95,12 +84,16 @@ pipeline {
                 script {
                     try {
                         bat 'git fetch origin'
-                        bat "sf.cmd sgd source delta --from ${GITHUB_TAG} --to ${env.LAST_COMMIT_SHA} --output ."
+                        bat "\"${SF_CMD}\" sgd source delta --from ${GITHUB_TAG} --to ${LAST_COMMIT_SHA} --output ."
                         bat 'cd package && dir'
 
-                        def testList = bat(script: 'node scripts/utilities/readTestFile.js', returnStdout: true).trim()
+                        def testConfig = readYaml file: 'test-config.yaml'
+                        def extraTests = testConfig.tests.extra_tests
+                        def testList = extraTests.join(',')
+                        
+                        echo "🧪 Tests a ejecutar: ${testList}"
 
-                        def deployOutput = bat(script: "sf.cmd project deploy validate --manifest package/package.xml --json --test-level RunSpecifiedTests --tests ${testList}", returnStdout: true)
+                        def deployOutput = bat(script: "\"${SF_CMD}\" project deploy validate --manifest package/package.xml --json --test-level RunSpecifiedTests --tests ${testList}", returnStdout: true)
                         def json = new groovy.json.JsonSlurper().parseText(deployOutput)
 
                         env.SF_DEPLOYMENT_URL = json.result.deployUrl
