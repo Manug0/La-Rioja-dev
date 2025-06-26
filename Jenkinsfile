@@ -6,6 +6,7 @@ pipeline {
         GITHUB_BRANCH = 'dev'
 
         AUTH_FILE_PATH = 'C:\\tmp\\sfdx-auth.json'
+        SF_CMD = 'C:\\Users\\Manu\\AppData\\Local\\sf\\client\\2.92.7-df40848\\bin\\sf.cmd'
         SF_DEPLOYMENT_URL = ''
         SF_DEPLOYMENT_STATUS = ''
         ERROR_MESSAGE = 'XX'
@@ -56,10 +57,10 @@ pipeline {
             steps {
                 script {
                     try {
-                        bat '"C:\\Users\\Manu\\AppData\\Local\\sf\\client\\2.92.7-df40848\\bin\\sf.cmd" config set disable-telemetry true --global'
-                        bat 'echo y | "C:\\Users\\Manu\\AppData\\Local\\sf\\client\\2.92.7-df40848\\bin\\sf.cmd" plugins install sfdx-git-delta'
-                        bat 'echo y | sf.cmd plugins install sfdx-hardis'
-                        bat 'npm install yaml fs'
+                        bat "${SF_CMD} config set disable-telemetry true --global"
+                        bat "echo y | ${SF_CMD} plugins install sfdx-git-delta"
+                        bat "echo y | ${SF_CMD} plugins install sfdx-hardis"
+                        bat "npm install yaml fs"
                     } catch (err) {
                         echo "❌ Error en 'Instalar dependencias': ${err.getMessage()}"
                         echo "${err}"
