@@ -75,10 +75,11 @@ pipeline {
                 script {
                     try {
                         withCredentials([string(credentialsId: 'SFDX_AUTH_URL_HSU', variable: 'SFDX_AUTH_URL')]) {
-                            bat """
-                                echo Autenticando en Salesforce...
-                                "${SF_CMD}" org login sfdx-url --sfdx-url "${SFDX_AUTH_URL}" --set-default
-                            """
+                            // Crear archivo temporal con la URL
+                            writeFile file: 'sfdx_auth_url.txt', text: SFDX_AUTH_URL
+                            bat "\"${SF_CMD}\" org login sfdx-url --sfdx-url-file sfdx_auth_url.txt --set-default"
+                            // Limpiar archivo temporal
+                            bat "del sfdx_auth_url.txt"
                         }
                     } catch (err) {
                         echo "❌ Error en 'Autenticarse en Salesforce': ${err.getMessage()}"
