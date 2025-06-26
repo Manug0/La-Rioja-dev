@@ -31,14 +31,20 @@ pipeline {
                 script {
                     try {
                         withCredentials([string(credentialsId: 'GITHUB-PAT', variable: 'TOKEN')]) {
-                            def authHeader = "Authorization: Bearer ${TOKEN}"
+                            // Escribe el token en un archivo temporal para evitar interpolación directa
+                            writeFile file: 'token.txt', text: TOKEN
                             def apiURL = "https://api.github.com/repos/${GITHUB_REPO}/branches/${GITHUB_BRANCH}"
-                            def command = "curl -s -H \"${authHeader}\" \"${apiURL}\" > branch_info.json"
-                            bat command
+                            // Usa el archivo temporal en el comando curl
+                            bat 'set /p TOKEN=<token.txt && curl -s -H "Authorization: Bearer %TOKEN%" "' + apiURL + '" > branch_info.json'
+                            bat "type branch_info.json" // Para depuración, puedes quitarlo luego
 
                             def branchInfo = readJSON file: 'branch_info.json'
-                            env.LAST_COMMIT_SHA = branchInfo.commit.sha
+                            env.LAST_COMMIT_SHA = branchInfo.commit?.sha
                             echo "🔎 Último SHA en ${GITHUB_BRANCH}: ${env.LAST_COMMIT_SHA}"
+
+                            if (!env.LAST_COMMIT_SHA) {
+                                error "❌ No se pudo obtener el SHA del último commit. Revisa el contenido de branch_info.json y el token de GitHub."
+                            }
                         }
                     } catch (err) {
                         echo "❌ Error en 'Obtener último commit desde GitHub': ${err.getMessage()}"
@@ -53,7 +59,7 @@ pipeline {
             steps {
                 script {
                     try {
-                        bat 'sf.cmd config set disable-telemetry true --global'
+                        bat '"C:\\Users\\Manu\\AppData\\Local\\sf\\client\\2.92.7-df40848\\bin\\sf.cmd" config set disable-telemetry true --global'
                         bat 'echo y | sf.cmd plugins install sfdx-git-delta'
                         bat 'echo y | sf.cmd plugins install sfdx-hardis'
                         bat 'npm install yaml fs'
