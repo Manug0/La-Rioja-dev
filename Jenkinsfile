@@ -105,10 +105,10 @@ pipeline {
                             
                             if (!testList || testList.isEmpty()) {
                                 echo "⚠️ No hay tests configurados - Usando RunLocalTests"
-                                bat "\"${SF_CMD}\" project deploy validate --manifest package\\package.xml --test-level RunLocalTests"
+                                bat "\"${SF_CMD}\" project deploy validate --manifest package\\package.xml --test-level RunLocalTests --target-org pre"
                             } else {
                                 echo "🧪 Ejecutando tests específicos: ${testList}"
-                                bat "\"${SF_CMD}\" project deploy validate --manifest package\\package.xml --test-level RunSpecifiedTests --tests ${testList}"
+                                bat "\"${SF_CMD}\" project deploy validate --manifest package\\package.xml --test-level RunSpecifiedTests --tests ${testList} --target-org pre"
                             }
                             
                         } catch (err) {
