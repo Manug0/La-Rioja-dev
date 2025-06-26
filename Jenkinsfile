@@ -84,7 +84,7 @@ pipeline {
                 script {
                     try {
                         bat 'git fetch origin'
-                        bat "\"${SF_CMD}\" sgd source delta --from ${GITHUB_TAG} --to ${LAST_COMMIT_SHA} --output ."
+                        bat "\"${SF_CMD}\" sgd source delta --from ${GITHUB_TAG} --to ${LAST_COMMIT_SHA} --output-dir | -o ."
                         bat 'cd package && dir'
 
                         def testConfig = readYaml file: 'test-config.yaml'
