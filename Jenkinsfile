@@ -39,7 +39,7 @@ pipeline {
                             bat "type branch_info.json" // Para depuración, puedes quitarlo luego
 
                             def branchInfo = readJSON file: 'branch_info.json'
-                            def sha = branchInfo['commit']['sha']
+                            def sha = branchInfo.commit.sha
                             echo "SHA encontrado: ${sha}"
                             env.LAST_COMMIT_SHA = sha
 
