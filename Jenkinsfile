@@ -38,7 +38,7 @@ pipeline {
         stage("Instalar dependencias") {
             steps {
                 bat """
-                    ${SF_CMD} plugins install sfdx-git-delta
+                    ${SF_CMD} plugins install sfdx-git-delta --force
                     npm install yaml fs
                 """
             }
