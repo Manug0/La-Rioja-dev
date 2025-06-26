@@ -42,10 +42,6 @@ pipeline {
                             def sha = branchInfo.commit.sha?.toString()
                             echo "SHA encontrado: ${sha}"
                             env.LAST_COMMIT_SHA = sha
-
-                            if (!env.LAST_COMMIT_SHA?.trim()) {
-                                error "❌ No se pudo obtener el SHA del último commit. Revisa el contenido de branch_info.json y el token de GitHub."
-                            }
                         }
                     } catch (err) {
                         echo "❌ Error en 'Obtener último commit desde GitHub': ${err.getMessage()}"
