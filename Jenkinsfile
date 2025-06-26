@@ -39,8 +39,9 @@ pipeline {
                             bat "type branch_info.json" // Para depuración, puedes quitarlo luego
 
                             def branchInfo = readJSON file: 'branch_info.json'
-                            env.LAST_COMMIT_SHA = branchInfo.commit?.sha
-                            echo "🔎 Último SHA en ${GITHUB_BRANCH}: ${env.LAST_COMMIT_SHA}"
+                            def sha = branchInfo.commit.sha
+                            echo "SHA encontrado: ${sha}"
+                            env.LAST_COMMIT_SHA = sha
 
                             if (!env.LAST_COMMIT_SHA) {
                                 error "❌ No se pudo obtener el SHA del último commit. Revisa el contenido de branch_info.json y el token de GitHub."
