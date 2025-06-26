@@ -45,7 +45,10 @@ pipeline {
         }
         stage("Descargar proyecto Git") {
             steps {
-                bat "set GIT_SSL_NO_VERIFY=true && git clone https://github.com/${GITHUB_REPO}.git"
+                script {
+                    bat "if exist La-Rioja-dev rmdir /s /q La-Rioja-dev"
+                    bat "set GIT_SSL_NO_VERIFY=true && git clone https://github.com/${GITHUB_REPO}.git"
+                }
             }
         }
         stage("Crear package.xml") {
