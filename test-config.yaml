@@ -8,7 +8,8 @@ environments:
   development:
     test_level: "RunSpecifiedTests"
     tests:
-      - HSU_SistemasUpdater_TEST
+      # - HSU_SistemasUpdater_TEST
+      - HSU_SimpleCalculator_TEST
 
   staging:
     test_level: "RunLocalTests"
