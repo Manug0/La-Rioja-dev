@@ -56,32 +56,34 @@ pipeline {
                 dir('La-Rioja-dev') {
                     script {
                         try {
-                            echo "🔄 Generando delta entre ${GITHUB_TAG} y ${GITHUB_LAST_COMMIT}"
+                            bat "git switch dev"
                             
-                            // Crear archivo .sgdignore temporal si no existe
-                            if (!fileExists('.sgdignore')) {
-                                echo "📝 Creando archivo .sgdignore temporal..."
-                                writeFile file: '.sgdignore', text: '''
-                                **/*_TEST.cls
-                                **/*Test.cls
-                                **/*Tests.cls
-                                '''
+                            // Verificar si existe package.xml
+                            if (!fileExists('package\\package.xml')) {
+                                echo "⚠️ No hay package.xml - Sin cambios para validar"
+                                echo "✅ Pipeline completado exitosamente"
+                                return
                             }
                             
-                            // Usar el archivo .sgdignore
-                            bat "\"${SF_CMD}\" sgd source delta --from ${GITHUB_TAG} --to ${GITHUB_LAST_COMMIT} --output . --ignore .sgdignore"
+                            echo "📦 Contenido final del package.xml:"
+                            bat "type package\\package.xml"
                             
-                            if (fileExists('package\\package.xml')) {
-                                echo "📦 Package.xml generado con cambios:"
-                                bat "type package\\package.xml"
-                                env.HAS_CHANGES = 'true'
+                            // Leer tests
+                            bat "node scripts\\utilities\\readTestFile.js > tests.txt"
+                            def testList = readFile('tests.txt').trim()
+                            
+                            echo "🧪 Tests configurados: ${testList}"
+                            
+                            if (!testList || testList.isEmpty()) {
+                                echo "⚠️ No hay tests configurados - Usando RunLocalTests"
+                                bat "\"${SF_CMD}\" project deploy validate --manifest package\\package.xml --test-level RunLocalTests --target-org pre"
                             } else {
-                                echo "✅ Sin cambios de metadata entre ${GITHUB_TAG} y ${GITHUB_LAST_COMMIT}"
-                                echo "🏁 Pipeline completado - No hay nada que validar"
-                                env.HAS_CHANGES = 'false'
+                                echo "🧪 Ejecutando tests específicos: ${testList}"
+                                bat "\"${SF_CMD}\" project deploy validate --manifest package\\package.xml --test-level RunSpecifiedTests --tests ${testList} --target-org pre"
                             }
+                            
                         } catch (err) {
-                            echo "❌ Error generando package: ${err.getMessage()}"
+                            echo "❌ Error en validación: ${err.getMessage()}"
                             currentBuild.result = 'FAILURE'
                             throw err
                         }
