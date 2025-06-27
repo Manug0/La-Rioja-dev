@@ -57,7 +57,8 @@ pipeline {
                     script {
                         try {
                             echo "🔄 Generando delta entre ${GITHUB_TAG} y ${GITHUB_LAST_COMMIT}"
-                            bat "\"${SF_CMD}\" sgd source delta --from ${GITHUB_TAG} --to ${GITHUB_LAST_COMMIT} --output ."
+                            // Ignorar archivos de test en el package.xml
+                            bat "\"${SF_CMD}\" sgd source delta --from ${GITHUB_TAG} --to ${GITHUB_LAST_COMMIT} --output . --ignore \"**/*_TEST.cls\""
                             
                             if (fileExists('package\\package.xml')) {
                                 echo "📦 Package.xml generado con cambios:"
