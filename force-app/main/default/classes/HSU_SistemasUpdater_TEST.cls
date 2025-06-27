@@ -37,10 +37,12 @@ private class HSU_SistemasUpdater_TEST {
     @isTest
     static void testUpdateSistemasSuccess() {
         Test.setMock(HttpCalloutMock.class, new MockSuccess());
+        
         Test.startTest();
-        HSU_SistemasUpdater.updateSistemas();
+        // Usar token mock para evitar Platform Cache
+        HSU_SistemasUpdater.updateSistemasWithToken('mock-token-123');
         Test.stopTest();
-
+        
         List<HSU_GlobalLists__c> sisList = [SELECT HSU_Id_CEX__c, Name, HSU_Label__c FROM HSU_GlobalLists__c];
         System.assertEquals(1, sisList.size());
         System.assertEquals('SIS1', sisList[0].HSU_Id_CEX__c);
