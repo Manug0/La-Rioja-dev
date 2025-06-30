@@ -1,67 +1,52 @@
 pipeline {
     agent any
     environment {
-        GITHUB_BRANCH = 'main'
-        GITHUB_TAG = 'HSU_START'
-        GITHUB_BASE_API_URL = 'https://api.github.com'
+        GITHUB_TOKEN = credentials('GITHUB-PAT')
         GITHUB_REPO = 'Manug0/La-Rioja-dev'
-        GITHUB_AUTH_HEADER = ''
+        GITHUB_BRANCH = 'main'
+        GITHUB_LAST_COMMIT = ''
+        GITHUB_TAG = 'HSU_START'
 
-        GITHUB_TOKEN = ''
+        DEPLOY_ENV = 'pre'
 
-        LAST_COMMIT_SHA = ''
-
-        AUTH_FILE_PATH = 'C:\\temp\\sfdx-auth.json'
-
+        AUTH_FILE_PATH = 'C:\\tmp\\sfdx-auth.json'
+        SF_CMD = 'C:\\Users\\Manu\\AppData\\Local\\sf\\client\\2.92.7-df40848\\bin\\sf.cmd'
         SF_DISABLE_TELEMETRY = 'true'
     }
 
     stages {
-        stage('Leer datos desde GitHub') {
+        stage("Leer información de GitHub") {
             steps {
                 script {
-                    withCredentials([string(credentialsId: 'GITHUB_TOKEN', variable: 'TOKEN')]) {
-                        env.GITHUB_TOKEN = TOKEN
-                        env.GITHUB_AUTH_HEADER = "Authorization: Bearer ${env.GITHUB_TOKEN}"
-                    }
-
-                    def apiURL = "https://api.github.com/repos/${GITHUB_REPO}/branches/${GITHUB_BRANCH}"
-                    def command = "curl -s -H \"${GITHUB_AUTH_HEADER}\" \"${apiURL}\" > branch_info.json"
-                    bat command
-
-                    def branchInfo = readJSON file: 'branch_info.json'
-                    env.LAST_COMMIT_SHA = branchInfo.commit.sha
-
-                    echo "Último commit en '${GITHUB_BRANCH}': ${env.LAST_COMMIT_SHA}"
+                    def branchInfoUrl = "https://api.github.com/repos/${GITHUB_REPO}/branches/${GITHUB_BRANCH}"
+                    def response = httpRequest(
+                        httpMode: 'GET',
+                        customHeaders: [[name: 'Authorization', value: "token ${GITHUB_TOKEN}"]],
+                        url: branchInfoUrl,
+                        validResponseCodes: '200'
+                    )
+                    def branchInfo = readJSON text: response.content
+                    GITHUB_LAST_COMMIT = branchInfo.commit.sha
+                    echo "Último commit SHA: ${GITHUB_LAST_COMMIT}"
                 }
             }
         }
 
-        stage('Instalar dependencias') {
+        stage("Instalar dependencias") {
             steps {
-                script {
-                    withCredentials([file(credentialsId: 'SFDX_AUTH_URL_PRE', variable: 'SFDC_AUTH_FILE')]) {
-                        bat "type %SFDC_AUTH_FILE%"
-                        bat "copy %SFDC_AUTH_FILE% ${AUTH_FILE_PATH}"
-                    }
-                    bat "sf org login sfdx-url --sfdx-url-file ${AUTH_FILE_PATH} --set-default"
-                }
-
-                bat '''
-                    sf -v
-                    sf config set disable-telemetry true --global
-                    echo y | sf plugins install sfdx-hardis
-                    echo y | sf plugins install sfdx-git-delta
-                '''
-
-                echo "Instalamos librerías Node.js necesarias"
-                bat 'npm install yaml fs'
+                bat """
+                    sfdx plugins:install sfdx-git-delta --force
+                    npm install yaml fs
+                """
             }
         }
 
-        stage("Clonar proyecto desde GitHub") {
+        stage("Descargar proyecto Git") {
             steps {
-                checkout scm
+                script {
+                    bat "if exist La-Rioja-dev rmdir /s /q La-Rioja-dev"
+                    bat "set GIT_SSL_NO_VERIFY=true && git clone https://github.com/${GITHUB_REPO}.git"
+                }
             }
         }
 
@@ -79,7 +64,6 @@ pipeline {
                                 env.HAS_CHANGES = 'true'
                             } else {
                                 echo "✅ Sin cambios de metadata entre ${GITHUB_TAG} y ${GITHUB_LAST_COMMIT}"
-                                echo "🏁 Pipeline completado - No hay nada que validar"
                                 env.HAS_CHANGES = 'false'
                             }
                         } catch (err) {
@@ -92,7 +76,7 @@ pipeline {
             }
         }
 
-        stage("🚀 DESPLEGAR A PRODUCCIÓN") {
+        stage("Desplegar a Salesforce") {
             when {
                 environment name: 'HAS_CHANGES', value: 'true'
             }
@@ -101,16 +85,14 @@ pipeline {
                     script {
                         try {
                             bat "git switch ${GITHUB_BRANCH}"
-                            
-                            echo "📦 Contenido del package.xml para DESPLIEGUE:"
+
+                            echo "📦 Contenido final del package.xml:"
                             bat "type package\\package.xml"
-                            
-                            bat "sf project deploy start --manifest package\\package.xml --test-level NoTestRun"
-                            
-                            echo "✅ 🎉 DESPLIEGUE COMPLETADO EXITOSAMENTE 🎉"
-                            
+
+                            bat "\"${SF_CMD}\" project deploy start --manifest package\\package.xml --test-level NoTestRun --target-org ${DEPLOY_ENV} --wait 10 --ignore-warnings"
+
                         } catch (err) {
-                            echo "❌ Error en despliegue: ${err.getMessage()}"
+                            echo "❌ Error durante el despliegue: ${err.getMessage()}"
                             currentBuild.result = 'FAILURE'
                             throw err
                         }
@@ -119,12 +101,13 @@ pipeline {
             }
         }
     }
+
     post {
         success {
-            echo "Validación completada correctamente ✅"
+            echo "🚀 Despliegue completado correctamente"
         }
         failure {
-            echo "Falló la validación del paquete ❌"
+            echo "❌ Falló el despliegue"
         }
     }
 }
