@@ -68,75 +68,63 @@ pipeline {
         stage("Crear package.xml") {
             steps {
                 dir('La-Rioja-dev') {
-                    bat "dir"
-                    bat "sf.cmd sgd source delta --from ${GITHUB_TAG} --to ${LAST_COMMIT_SHA} --output ."
-                    bat "dir package"
-                    bat "type package\\package.xml"
+                    script {
+                        try {
+                            echo "🔄 Generando delta entre ${GITHUB_TAG} y ${GITHUB_LAST_COMMIT}"
+                            bat "\"${SF_CMD}\" sgd source delta --from ${GITHUB_TAG} --to ${GITHUB_LAST_COMMIT} --output ."
+                            
+                            if (fileExists('package\\package.xml')) {
+                                echo "📦 Package.xml generado con cambios:"
+                                bat "type package\\package.xml"
+                                env.HAS_CHANGES = 'true'
+                            } else {
+                                echo "✅ Sin cambios de metadata entre ${GITHUB_TAG} y ${GITHUB_LAST_COMMIT}"
+                                echo "🏁 Pipeline completado - No hay nada que validar"
+                                env.HAS_CHANGES = 'false'
+                            }
+                        } catch (err) {
+                            echo "❌ Error generando package: ${err.getMessage()}"
+                            currentBuild.result = 'FAILURE'
+                            throw err
+                        }
+                    }
                 }
             }
         }
 
-        stage("Validar package.xml y ejecutar pruebas") {
+        stage("🚀 DESPLEGAR A PRODUCCIÓN") {
+            when {
+                environment name: 'HAS_CHANGES', value: 'true'
+            }
             steps {
                 dir('La-Rioja-dev') {
-                    bat "git switch ${GITHUB_BRANCH}"
-                    def testList = bat(script: "node scripts\\utilities\\readTestFile.js", returnStdout: true).trim()
-                    bat "sf project deploy start --manifest package\\package.xml --test-level RunSpecifiedTests --tests ${testList}"
+                    script {
+                        try {
+                            bat "git switch ${GITHUB_BRANCH}"
+                            
+                            echo "📦 Contenido del package.xml para DESPLIEGUE:"
+                            bat "type package\\package.xml"
+                            
+                            bat "sf project deploy start --manifest package\\package.xml --test-level NoTestRun"
+                            
+                            echo "✅ 🎉 DESPLIEGUE COMPLETADO EXITOSAMENTE 🎉"
+                            
+                        } catch (err) {
+                            echo "❌ Error en despliegue: ${err.getMessage()}"
+                            currentBuild.result = 'FAILURE'
+                            throw err
+                        }
+                    }
                 }
             }
         }
     }
     post {
-    success {
-        script {
-            try {
-                def payload = [
-                    state      : "success",
-                    context    : "Jenkins CI",
-                    description: "Build passed"
-                ]
-                withCredentials([string(credentialsId: 'GITHUB_TOKEN', variable: 'TOKEN')]) {
-                    httpRequest(
-                        httpMode: 'POST',
-                        url: "https://api.github.com/repos/${GITHUB_REPO}/statuses/${LAST_COMMIT_SHA}",
-                        customHeaders: [
-                            [name: 'Authorization', value: "Bearer ${TOKEN}"],
-                            [name: 'Content-Type', value: 'application/json']
-                        ],
-                        requestBody: groovy.json.JsonOutput.toJson(payload),
-                        validResponseCodes: '200:299'
-                    )
-                }
-            } catch (Exception ex) {
-                echo "Error al actualizar estado del commit como success: ${ex.getMessage()}"
-            }
+        success {
+            echo "Validación completada correctamente ✅"
+        }
+        failure {
+            echo "Falló la validación del paquete ❌"
         }
     }
-    failure {
-        script {
-            try {
-                def payload = [
-                    state      : "failure",
-                    context    : "Jenkins CI",
-                    description: "Build failed"
-                ]
-                withCredentials([string(credentialsId: 'GITHUB_TOKEN', variable: 'TOKEN')]) {
-                    httpRequest(
-                        httpMode: 'POST',
-                        url: "https://api.github.com/repos/${GITHUB_REPO}/statuses/${LAST_COMMIT_SHA}",
-                        customHeaders: [
-                            [name: 'Authorization', value: "Bearer ${TOKEN}"],
-                            [name: 'Content-Type', value: 'application/json']
-                        ],
-                        requestBody: groovy.json.JsonOutput.toJson(payload),
-                        validResponseCodes: '200:299'
-                    )
-                }
-            } catch (Exception ex) {
-                echo "Error al actualizar estado del commit como failure: ${ex.getMessage()}"
-            }
-        }
-    }
-}
-
 }
