@@ -85,19 +85,11 @@ pipeline {
                 dir('La-Rioja-dev') {
                     script {
                         try {
-                            bat "git switch dev"
-                            
-                            // Verificar si existe package.xml
-                            if (!fileExists('package\\package.xml')) {
-                                echo "⚠️ No hay package.xml - Sin cambios para validar"
-                                echo "✅ Pipeline completado exitosamente"
-                                return
-                            }
+                            bat "git switch ${GITHUB_BRANCH}"
                             
                             echo "📦 Contenido final del package.xml:"
                             bat "type package\\package.xml"
                             
-                            // Leer tests
                             bat "node scripts\\utilities\\readTestFile.js > tests.txt"
                             def testList = readFile('tests.txt').trim()
                             
